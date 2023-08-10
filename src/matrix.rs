@@ -20,6 +20,18 @@ pub trait MatrixDimensions {
     }
 }
 
+impl<T: MatrixDimensions> MatrixDimensions for &T {
+    fn rows(&self) -> usize {
+        (*self).rows()
+    }
+    fn columns(&self) -> usize {
+        (*self).columns()
+    }
+    fn shape(&self) -> (usize, usize) {
+        (*self).shape()
+    }
+}
+
 // --- Matrix ------------------------------------------------------------------
 
 #[derive(Debug, Clone)]
@@ -92,10 +104,12 @@ impl<T: Default + Copy, A: Unsigned> IndexMut<usize> for Matrix<T, A> {
 }
 
 impl<T: Default + Copy, A: Unsigned> MatrixDimensions for Matrix<T, A> {
+    #[inline]
     fn rows(&self) -> usize {
         self.rows
     }
 
+    #[inline]
     fn columns(&self) -> usize {
         self.cols
     }
@@ -128,7 +142,7 @@ impl<T> DokMatrix<T> {
     pub fn nnz(&self) -> usize {
         self.data.len()
     }
-    
+
     pub fn grow(&mut self, rows: usize, cols: usize) {
         self.rows += rows;
         self.cols += cols;
@@ -220,10 +234,12 @@ impl<T> AsRef<HashMap<(usize, usize), T>> for DokMatrix<T> {
 }
 
 impl<T> MatrixDimensions for DokMatrix<T> {
+    #[inline]
     fn rows(&self) -> usize {
         self.rows
     }
 
+    #[inline]
     fn columns(&self) -> usize {
         self.cols
     }
@@ -266,10 +282,12 @@ impl<T> Default for CscMatrix<T> {
 }
 
 impl<T> MatrixDimensions for CscMatrix<T> {
+    #[inline]
     fn rows(&self) -> usize {
         self.rows
     }
 
+    #[inline]
     fn columns(&self) -> usize {
         self.col_index.len() - 1
     }
@@ -365,10 +383,12 @@ impl<T> Default for CsrMatrix<T> {
 }
 
 impl<T> MatrixDimensions for CsrMatrix<T> {
+    #[inline]
     fn rows(&self) -> usize {
         self.row_index.len() - 1
     }
 
+    #[inline]
     fn columns(&self) -> usize {
         self.cols
     }

@@ -2,8 +2,8 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 
 use lightmotif::abc::Dna;
-use lightmotif::pli::Maximum;
 use lightmotif::pli::Encode;
+use lightmotif::pli::Maximum;
 use lightmotif::pli::Score;
 use lightmotif::pli::Threshold;
 use lightmotif::pwm::CountMatrix;

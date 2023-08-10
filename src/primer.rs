@@ -58,7 +58,6 @@ impl Primer {
             .unwrap()
             .to_freq(0.1)
             .to_scoring(None);
-        // println!("{:?}", pssm);
         Self {
             template: t,
             profile: pssm,
