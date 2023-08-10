@@ -1,8 +1,5 @@
 #![allow(unused)]
 
-extern crate fastq;
-extern crate flate2;
-
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::io::BufRead;
@@ -32,9 +29,8 @@ use pssmurf::seq::DesambiguationIterator;
 use pssmurf::utils::Interner;
 use pssmurf::utils::OrderedSet;
 use pssmurf::utils::Paired;
-
-use bio::io::fasta::Reader as FastaReader;
-// use bio::io::fastq::Reader as FastqReader;
+use pssmurf::io::FastqReader;
+use pssmurf::io::FastaReader;
 use pssmurf::utils::Rc;
 
 use lightmotif::num::Unsigned;
@@ -44,66 +40,7 @@ use lightmotif::pli::Encode;
 use lightmotif::pli::Score;
 use lightmotif::pli::Threshold;
 
-#[derive(Debug, Clone, Default)]
-struct FastqRecord {
-    id: String,
-    sequence: String,
-    strand: String,
-    quality: String,
-}
 
-#[derive(Debug, Clone)]
-struct FastqReader<R: BufRead> {
-    reader: R,
-}
-
-impl<R: BufRead> FastqReader<R> {
-    pub fn new(reader: R) -> Self {
-        Self { reader }
-    }
-}
-
-impl<R: Read> From<R> for FastqReader<BufReader<R>> {
-    fn from(reader: R) -> Self {
-        Self::new(BufReader::new(reader))
-    }
-}
-
-impl<R: BufRead> Iterator for FastqReader<R> {
-    type Item = Result<FastqRecord, std::io::Error>;
-    fn next(&mut self) -> Option<Self::Item> {
-        let mut record = FastqRecord::default();
-        match self.reader.read_line(&mut record.id) {
-            Ok(0) => return None,
-            Err(e) => return Some(Err(e)),
-            Ok(_) => (),
-        }
-        record.id.pop();
-
-        match self.reader.read_line(&mut record.sequence) {
-            Ok(0) => return None,
-            Err(e) => return Some(Err(e)),
-            Ok(_) => (),
-        }
-        record.sequence.pop();
-
-        match self.reader.read_line(&mut record.strand) {
-            Ok(0) => return None,
-            Err(e) => return Some(Err(e)),
-            Ok(_) => (),
-        }
-        record.strand.pop();
-
-        match self.reader.read_line(&mut record.quality) {
-            Ok(0) => return None,
-            Err(e) => return Some(Err(e)),
-            Ok(_) => (),
-        }
-        record.quality.pop();
-
-        Some(Ok(record))
-    }
-}
 
 
 fn simd_mismatches(query: &[u8], db: &Matrix<u8>, out: &mut [u8]) {
@@ -238,23 +175,25 @@ fn main() {
     let reader = std::fs::File::open(DB)
         .map(|r| pb.wrap_read(r))
         .map(flate2::read::GzDecoder::new)
-        .map(FastaReader::new)
+        .map(FastaReader::from)
         .unwrap();
 
     // Extract reference region kmers from all sequences
     let mut n = 0;
-    for (i, read) in reader.records().map(Result::unwrap).enumerate() {
-        let seq = std::str::from_utf8(read.seq()).unwrap();
-        let n_ambiguous = count_ambiguous(&seq);
+    for (i, read) in reader.map(Result::unwrap).enumerate() {
+        let n_ambiguous = count_ambiguous(&read.sequence);
         if n_ambiguous == 0 {
-            builder.add(read.id(), &seq);
+            builder.add(&read.id, &read.sequence);
             n += 1;
         } else if n_ambiguous <= 3 {
-            for dna in DesambiguationIterator::new(&seq) {
-                builder.add(read.id(), &dna);
-                n += 1;
+            for dna in DesambiguationIterator::new(&read.sequence) {
+                builder.add(&read.id, &dna);
             }
+            n += 1;
         }
+        // if i > 10000 {
+        //     break
+        // }
     }
 
     pb.finish_and_clear();
@@ -308,7 +247,7 @@ fn main() {
         .map(FastqReader::from)
         .unwrap();
 
-    // let pli = lightmotif::Pipeline::avx2().unwrap();
+    // let pli = lightmotif::Pipeline::<lightmotif::Dna, _>::avx2().unwrap();
     // let mut scores = lightmotif::pli::StripedScores::<lightmotif::num::U32>::empty();
 
     let mut mapper = Mapper::new(&db);
@@ -330,14 +269,15 @@ fn main() {
 
         // let mut striped = read
         //     .as_ref()
-        //     .map(|r| pli.encode(r.seq()))
+        //     .map(|r| pli.encode(r.sequence.as_bytes()))
         //     .map(Result::unwrap)
-        //     .map(lightmotif::seq::EncodedSequence::from)
-        //     .map(|e| e.to_striped());
+        //     .map(lightmotif::seq::EncodedSequence::<lightmotif::Dna>::from)
+        //     .map(|e| e.to_striped::<lightmotif::num::U32>());
         // striped.as_mut().map(|s| s.configure_wrap(builder.k));
 
         let seq = read.as_ref().map(|r| &r.sequence);
         let (r, pos, primer_mismatches) = db
+        // let (r, pos) = db
             .regions
             .iter()
             .enumerate()
@@ -379,18 +319,21 @@ fn main() {
         if primer_mismatches.forward > 2 || primer_mismatches.backward > 2 {
             continue
         }
-
         let mut kmer = Paired::new(
             &seq.forward[pos.forward + db.regions[r].primer.forward.len()..],
             &seq.backward[pos.backward + db.regions[r].primer.backward.len()..],
         );
+        // let mut kmer = Paired::new(
+        //     &seq.forward[pos.forward..], 
+        //     &seq.backward[pos.backward..]
+        // );
         if kmer.forward.len() > db.k {
             kmer.forward = &kmer.forward[..db.k];
         }
         if kmer.backward.len() > db.k {
             kmer.backward = &kmer.backward[..db.k];
         }
-
+        
         // if pos.forward + builder.k > read.forward.seq().len() {
         //     println!("{:?}", &pos.backward);
         //     continue;
