@@ -1,0 +1,393 @@
+use std::cmp::Ordering;
+use std::collections::HashMap;
+use std::collections::HashSet;
+use std::ops::Add;
+use std::ops::AddAssign;
+use std::ops::Index;
+use std::ops::IndexMut;
+use std::ops::Mul;
+
+use lightmotif::num::Unsigned;
+use lightmotif::num::U32;
+
+// --- Matrix ------------------------------------------------------------------
+
+#[derive(Debug, Clone)]
+pub struct Matrix<T: Default + Copy, A: Unsigned = U32> {
+    data: Vec<T>,
+    rows: usize,
+    cols: usize,
+    offset: usize,
+    _alignment: std::marker::PhantomData<A>,
+}
+
+impl<T: Default + Copy, A: Unsigned> Matrix<T, A> {
+    pub fn new(rows: usize, cols: usize) -> Self {
+        // Always over-allocate columns to avoid alignment issues.
+        let c = cols + (A::USIZE - cols % A::USIZE) * (cols % A::USIZE > 0) as usize;
+        let data = vec![T::default(); (rows + 1) * c];
+
+        // compute offset to aligned memory
+        let mut offset = 0;
+        while data[offset..].as_ptr() as usize % c > 0 {
+            offset += 1
+        }
+
+        Self {
+            offset,
+            rows,
+            cols,
+            data,
+            _alignment: std::marker::PhantomData,
+        }
+    }
+
+    pub fn transpose(&self) -> Self {
+        let mut t = Self::new(self.cols, self.rows);
+        for i in 0..self.rows {
+            for j in 0..self.cols {
+                t[j][i] = self[i][j];
+            }
+        }
+        t
+    }
+
+    pub fn rows(&self) -> usize {
+        self.rows
+    }
+
+    pub fn cols(&self) -> usize {
+        self.cols
+    }
+
+    #[inline]
+    pub fn stride(&self) -> usize {
+        let x = std::mem::size_of::<T>();
+        let c = self.cols * x;
+        let b =
+            self.cols + (A::USIZE - self.cols % A::USIZE) * ((self.cols % A::USIZE) > 0) as usize;
+        b / x + ((b % x) > 0) as usize
+    }
+}
+
+impl<T: Default + Copy, A: Unsigned> Index<usize> for Matrix<T, A> {
+    type Output = [T];
+    #[inline]
+    fn index(&self, index: usize) -> &Self::Output {
+        let c = self.stride();
+        let row = self.offset + c * index;
+        &self.data[row..row + self.cols]
+    }
+}
+
+impl<T: Default + Copy, A: Unsigned> IndexMut<usize> for Matrix<T, A> {
+    #[inline]
+    fn index_mut(&mut self, index: usize) -> &mut Self::Output {
+        let c = self.stride();
+        let row = self.offset + c * index;
+        &mut self.data[row..row + self.cols]
+    }
+}
+
+// --- DokMatrix ---------------------------------------------------------------
+
+#[derive(Debug, Clone)]
+pub struct DokMatrix<T> {
+    data: HashMap<(usize, usize), T>,
+    pub rows: usize,
+    pub cols: usize,
+}
+
+impl<T> DokMatrix<T> {
+    pub fn new(rows: usize, cols: usize) -> Self {
+        Self {
+            data: Default::default(),
+            rows,
+            cols,
+        }
+    }
+
+    pub fn insert(&mut self, i: usize, j: usize, data: T) {
+        assert!(i < self.rows);
+        assert!(j < self.cols);
+        self.data.insert((i, j), data);
+    }
+
+    pub fn nnz(&self) -> usize {
+        self.data.len()
+    }
+}
+
+impl<T: Default + Copy> DokMatrix<T> {
+    pub fn get(&self, i: usize, j: usize) -> T {
+        self.data.get(&(i, j)).map(|x| *x).unwrap_or_default()
+    }
+}
+
+impl<T: Clone> DokMatrix<T> {
+    pub fn to_csr(&self) -> CsrMatrix<T> {
+        let mut indices = self.data.keys().collect::<Vec<_>>();
+        indices.sort_unstable();
+
+        let mut csr = CsrMatrix::new(self.rows, self.cols);
+        let mut it = indices.into_iter().peekable();
+
+        for i in 0..self.rows {
+            csr.row_index.push(csr.col_index.len());
+            while let Some((x, _)) = it.peek() {
+                if *x != i {
+                    break;
+                }
+                let (x, y) = it.next().unwrap();
+                csr.col_index.push(*y);
+                csr.data.push(self.data.get(&(*x, *y)).unwrap().clone());
+            }
+        }
+
+        csr.row_index.push(csr.col_index.len());
+        assert_eq!(csr.row_index.len(), csr.rows + 1);
+        csr
+    }
+
+    pub fn to_csc(&self) -> CscMatrix<T> {
+        let mut indices = self.data.keys().map(|(i, j)| (j, i)).collect::<Vec<_>>();
+        indices.sort_unstable();
+
+        let mut csc = CscMatrix::new(self.rows, self.cols);
+        let mut it = indices.into_iter().peekable();
+
+        for j in 0..self.cols {
+            csc.col_index.push(csc.row_index.len());
+            while let Some((y, _)) = it.peek() {
+                if **y != j {
+                    break;
+                }
+                let (y, x) = it.next().unwrap();
+                csc.row_index.push(*x);
+                csc.data.push(self.data.get(&(*x, *y)).unwrap().clone());
+            }
+        }
+
+        csc.col_index.push(csc.row_index.len());
+        assert_eq!(csc.col_index.len(), csc.cols + 1);
+        csc
+    }
+}
+
+impl<T> Default for DokMatrix<T> {
+    fn default() -> Self {
+        Self {
+            data: HashMap::new(),
+            rows: 0,
+            cols: 0,
+        }
+    }
+}
+
+impl<T: AddAssign + Clone> AddAssign<Self> for DokMatrix<T> {
+    fn add_assign(&mut self, rhs: Self) {
+        assert_eq!(self.rows, rhs.rows);
+        assert_eq!(self.cols, rhs.cols);
+        for (coord, rval) in rhs.data.iter() {
+            if let Some(lval) = self.data.get_mut(&coord) {
+                lval.add_assign(rval.clone());
+            } else {
+                self.data.insert(*coord, rval.clone());
+            }
+        }
+    }
+}
+
+impl<T> AsRef<HashMap<(usize, usize), T>> for DokMatrix<T> {
+    fn as_ref(&self) -> &HashMap<(usize, usize), T> {
+        &self.data
+    }
+}
+
+// --- CscMatrix ---------------------------------------------------------------
+
+#[derive(Debug, Clone)]
+pub struct CscMatrix<T> {
+    pub rows: usize,
+    pub cols: usize,
+    data: Vec<T>,
+    col_index: Vec<usize>,
+    row_index: Vec<usize>,
+}
+
+impl<T> CscMatrix<T> {
+    fn new(rows: usize, cols: usize) -> Self {
+        CscMatrix {
+            rows,
+            cols,
+            data: Vec::new(),
+            col_index: Vec::new(),
+            row_index: Vec::with_capacity(rows),
+        }
+    }
+
+    pub fn nnz(&self) -> usize {
+        self.data.len()
+    }
+}
+
+impl<T> Default for CscMatrix<T> {
+    fn default() -> Self {
+        Self {
+            rows: 0,
+            cols: 0,
+            data: Vec::new(),
+            col_index: Vec::new(),
+            row_index: Vec::new(),
+        }
+    }
+}
+
+// --- CsrMatrix ---------------------------------------------------------------
+
+#[derive(Debug, Clone)]
+pub struct CsrMatrix<T> {
+    pub rows: usize,
+    pub cols: usize,
+    data: Vec<T>,
+    col_index: Vec<usize>,
+    row_index: Vec<usize>,
+}
+
+impl<T> CsrMatrix<T> {
+    fn new(rows: usize, cols: usize) -> Self {
+        CsrMatrix {
+            rows,
+            cols,
+            data: Vec::new(),
+            col_index: Vec::new(),
+            row_index: Vec::with_capacity(rows),
+        }
+    }
+
+    pub fn nnz(&self) -> usize {
+        self.data.len()
+    }
+}
+
+impl<T: Add<Output = T> + Mul<Output = T> + PartialEq + Clone> CsrMatrix<T> {
+    pub fn dot(&self, rhs: &CscMatrix<T>) -> DokMatrix<T> {
+        assert_eq!(self.cols, rhs.rows);
+
+        let mut out = DokMatrix::new(self.rows, rhs.cols);
+
+        for i in 0..self.rows {
+            if self.row_index[i] == self.row_index[i + 1] {
+                continue;
+            }
+
+            let row_cols = &self.col_index[self.row_index[i]..self.row_index[i + 1]];
+            let row_data = &self.data[self.row_index[i]..self.row_index[i + 1]];
+
+            for j in 0..rhs.cols {
+                if rhs.col_index[j] == rhs.col_index[j + 1] {
+                    continue;
+                }
+
+                let col_rows = &rhs.row_index[rhs.col_index[j]..rhs.col_index[j + 1]];
+                let col_data = &rhs.data[rhs.col_index[j]..rhs.col_index[j + 1]];
+
+                let mut x: Option<T> = None;
+                let mut k1 = 0;
+                let mut k2 = 0;
+
+                while k1 < row_cols.len() && k2 < col_rows.len() {
+                    match row_cols[k1].cmp(&col_rows[k2]) {
+                        Ordering::Less => k1 += 1,
+                        Ordering::Greater => k2 += 1,
+                        Ordering::Equal => {
+                            let p = row_data[k1].clone() * col_data[k2].clone();
+                            if let Some(n) = x.as_mut() {
+                                *n = n.clone() + p;
+                            } else {
+                                x = Some(p);
+                            }
+                            k1 += 1;
+                            k2 += 1;
+                        }
+                    }
+                }
+
+                if let Some(res) = x {
+                    out.insert(i, j, res);
+                }
+            }
+        }
+
+        out
+    }
+}
+
+impl<T> Default for CsrMatrix<T> {
+    fn default() -> Self {
+        Self {
+            rows: 0,
+            cols: 0,
+            data: Vec::new(),
+            col_index: Vec::new(),
+            row_index: Vec::new(),
+        }
+    }
+}
+
+#[cfg(test)]
+mod test {
+
+    use super::*;
+
+    #[test]
+    fn test_dok_to_csr() {
+        let mut dok_matrix = DokMatrix::<u8>::new(4, 6);
+        dok_matrix.insert(0, 0, 10);
+        dok_matrix.insert(0, 1, 20);
+        dok_matrix.insert(1, 1, 30);
+        dok_matrix.insert(1, 3, 40);
+        dok_matrix.insert(2, 2, 50);
+        dok_matrix.insert(2, 3, 60);
+        dok_matrix.insert(2, 4, 70);
+        dok_matrix.insert(3, 5, 80);
+
+        let csr = dok_matrix.to_csr();
+        println!("{:?}", csr);
+        assert_eq!(csr.data, vec![10, 20, 30, 40, 50, 60, 70, 80]);
+        assert_eq!(csr.col_index, vec![0, 1, 1, 3, 2, 3, 4, 5]);
+        assert_eq!(csr.row_index, vec![0, 2, 4, 7, 8]);
+    }
+
+    #[test]
+    fn test_dok_to_csc() {
+        let mut dok_matrix = DokMatrix::<u8>::new(6, 4);
+        dok_matrix.insert(0, 0, 10);
+        dok_matrix.insert(1, 0, 20);
+        dok_matrix.insert(1, 1, 30);
+        dok_matrix.insert(3, 1, 40);
+        dok_matrix.insert(2, 2, 50);
+        dok_matrix.insert(3, 2, 60);
+        dok_matrix.insert(4, 2, 70);
+        dok_matrix.insert(5, 3, 80);
+
+        let csc = dok_matrix.to_csc();
+        assert_eq!(csc.data, vec![10, 20, 30, 40, 50, 60, 70, 80]);
+        assert_eq!(csc.row_index, vec![0, 1, 1, 3, 2, 3, 4, 5]);
+        assert_eq!(csc.col_index, vec![0, 2, 4, 7, 8]);
+    }
+
+    #[test]
+    fn test_csr_dot() {
+        let mut a = DokMatrix::<u8>::new(2, 2);
+        a.insert(0, 0, 1);
+        a.insert(0, 1, 2);
+        a.insert(1, 0, 3);
+
+        let c = a.to_csr().dot(&a.to_csc());
+        assert_eq!(c.get(0, 0), 7);
+        assert_eq!(c.get(0, 1), 2);
+        assert_eq!(c.get(1, 0), 3);
+        assert_eq!(c.get(1, 1), 6);
+    }
+}
