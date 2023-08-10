@@ -18,6 +18,7 @@ use pssmurf::db::DatabaseBuilder;
 use pssmurf::mapper::Mapper;
 use pssmurf::matrix::CsrMatrix;
 use pssmurf::matrix::DokMatrix;
+use pssmurf::matrix::CooMatrix;
 use pssmurf::matrix::Matrix;
 use pssmurf::matrix::MatrixDimensions;
 use pssmurf::primer::Primer;
@@ -408,10 +409,10 @@ fn main() {
 
     // --- BUILD Q MATRIX ---
     println!("Computing Q_i,j matrix");
-    let mut q_matrix = DokMatrix::<f32>::new(mapper.expected[0].rows(), db.names.len());
+    let mut q_matrix = CooMatrix::<f32>::new(mapper.expected[0].rows(), db.names.len());
     for (r, region) in db.regions.iter().enumerate() {
         let e_csr = mapper.expected[r].to_csr();
-        q_matrix += e_csr.dot(&region.matrix);
+        q_matrix = q_matrix + e_csr.dot(&region.matrix);
     }
     // println!("{:?}", q_matrix);
 
@@ -423,26 +424,23 @@ fn main() {
     let pb = indicatif::ProgressBar::new(size as u64)
         .with_style(indicatif::ProgressStyle::with_template("[{elapsed_precise}] {bar:40.cyan/blue} {pos}/{total} ({per_sec}) {msg}")
         .unwrap());
+    
     let mut pi = vec![1.0; q_matrix.columns()];
     let mut up = vec![0.0; q_matrix.columns()];
+    let mut dens = vec![0.0; q_matrix.rows()];
+
     for it in pb.wrap_iter(0..10) {
         // println!("iteration {}", it);
 
-        let mut dens = (0..q_matrix.rows())
-            .map(|i| {
-                q_matrix
-                    .as_ref()
-                    .iter()
-                    .filter(|((x, y), _)| *x == i)
-                    .map(|((_, j), x)| x * pi[*j])
-                    .sum::<f32>()
-            })
-            .collect::<Vec<_>>();
+        dens.fill(0.0);
+        for (i, j, x) in q_matrix.iter() {
+            dens[i] += x * pi[j];
+        }
 
         up.fill(0.0);
-        for ((i, j), x) in q_matrix.as_ref().iter() {
-            if dens[*i] > 0.0 {
-                up[*j] += *x / dens[*i]
+        for (i, j, x) in q_matrix.iter() {
+            if dens[i] > 0.0 {
+                up[j] += *x / dens[i]
             }
         }
 

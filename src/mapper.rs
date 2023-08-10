@@ -1,10 +1,10 @@
 use super::db::Database;
-use super::matrix::DokMatrix;
+use super::matrix::CooMatrix;
 
 #[derive(Debug, Clone)]
 pub struct Mapper<'db> {
     pub db: &'db Database,
-    pub expected: Vec<DokMatrix<f32>>,
+    pub expected: Vec<CooMatrix<f32>>,
 }
 
 impl<'db> Mapper<'db> {
@@ -12,7 +12,7 @@ impl<'db> Mapper<'db> {
         let expected = db
             .regions
             .iter()
-            .map(|region| DokMatrix::new(0, region.unique_pairs.len()))
+            .map(|region| CooMatrix::new(0, region.unique_pairs.len()))
             .collect();
         Self { expected, db }
     }
