@@ -10,6 +10,8 @@ use lightmotif::pwm::CountMatrix;
 use lightmotif::seq::EncodedSequence;
 
 use crate::matrix::Matrix;
+use crate::matrix::DokMatrix;
+use crate::matrix::CscMatrix;
 use crate::primer::Primer;
 use crate::seq::mismatches;
 use crate::seq::reverse_complement;
@@ -194,7 +196,7 @@ impl DatabaseBuilder {
     pub fn to_database(&self) -> Database {
         let k = self.k;
 
-        // Extract the unique names of all the references stored in the builder.
+        // Extract the unique names of all the references stored so far.
         let names = self
             .kmers
             .iter()
@@ -202,15 +204,15 @@ impl DatabaseBuilder {
             .cloned()
             .collect::<OrderedSet<_>>();
 
-        // Prepare the amplified vector
+        // Count how many regions were amplified for each reference.
         let mut amplified = vec![0; names.len()];
+        for kmer in self.kmers.iter().map(|v| v.iter()).flatten() {
+            amplified[names[&kmer.id]] += 1;
+        }
+
+        // Group kmers for individual regions
         let mut regions = Vec::with_capacity(self.primers.len());
         for (primer, kmers) in self.primers.iter().zip(self.kmers.iter()) {
-            // Count amplified regions per reference sequence
-            for kmer in kmers.iter() {
-                amplified[names[&kmer.id]] += 1;
-            }
-
             // Extract unique kmers
             let unique = kmers
                 .iter()
@@ -237,7 +239,7 @@ impl DatabaseBuilder {
                 .iter()
                 .map(|entry| &entry.kmer_index)
                 .cloned()
-                .collect();
+                .collect::<OrderedSet<_>>();
 
             // Build PSSMs from the kmer block.
             let profile = unique.as_ref().map(|x| {
@@ -260,13 +262,21 @@ impl DatabaseBuilder {
                 matrix.transpose()
             });
 
+            // Build M_hj matrix
+            let mut matrix = DokMatrix::new(unique_pairs.len(), names.len());
+            for entry in entries.iter() {
+                let h = unique_pairs[&entry.kmer_index];
+                let j = entry.id;
+                matrix.insert(h, j, 1.0 / amplified[j] as f32);
+            }
+
             // Record region
             regions.push(DatabaseRegion {
                 primer: primer.clone(),
-                // unique_kmers: unique,
                 profile,
                 entries,
                 unique_pairs,
+                matrix: matrix.to_csc(),
                 kmers: kmer_block,
             })
         }
@@ -301,6 +311,8 @@ pub struct DatabaseRegion {
     pub entries: Vec<DatabaseEntry>,
     /// A dense, aligned matrix storing unique forward and backward k-mers.
     pub kmers: Paired<Matrix<u8>>,
+    /// A sparse matrix storing the k-mer to reference correspondance.
+    pub matrix: CscMatrix<f32>,
 }
 
 #[derive(Debug, Clone)]
