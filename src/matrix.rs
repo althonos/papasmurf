@@ -10,6 +10,16 @@ use std::ops::Mul;
 use lightmotif::num::Unsigned;
 use lightmotif::num::U32;
 
+// --- MatrixDimensions --------------------------------------------------------
+
+pub trait MatrixDimensions {
+    fn rows(&self) -> usize;
+    fn columns(&self) -> usize;
+    fn shape(&self) -> (usize, usize) {
+        (self.rows(), self.columns())
+    }
+}
+
 // --- Matrix ------------------------------------------------------------------
 
 #[derive(Debug, Clone)]
@@ -52,14 +62,6 @@ impl<T: Default + Copy, A: Unsigned> Matrix<T, A> {
         t
     }
 
-    pub fn rows(&self) -> usize {
-        self.rows
-    }
-
-    pub fn cols(&self) -> usize {
-        self.cols
-    }
-
     #[inline]
     pub fn stride(&self) -> usize {
         let x = std::mem::size_of::<T>();
@@ -89,13 +91,23 @@ impl<T: Default + Copy, A: Unsigned> IndexMut<usize> for Matrix<T, A> {
     }
 }
 
+impl<T: Default + Copy, A: Unsigned> MatrixDimensions for Matrix<T, A> {
+    fn rows(&self) -> usize {
+        self.rows
+    }
+
+    fn columns(&self) -> usize {
+        self.cols
+    }
+}
+
 // --- DokMatrix ---------------------------------------------------------------
 
 #[derive(Debug, Clone)]
 pub struct DokMatrix<T> {
     data: HashMap<(usize, usize), T>,
-    pub rows: usize,
-    pub cols: usize,
+    rows: usize,
+    cols: usize,
 }
 
 impl<T> DokMatrix<T> {
@@ -116,6 +128,11 @@ impl<T> DokMatrix<T> {
     pub fn nnz(&self) -> usize {
         self.data.len()
     }
+    
+    pub fn grow(&mut self, rows: usize, cols: usize) {
+        self.rows += rows;
+        self.cols += cols;
+    }
 }
 
 impl<T: Default + Copy> DokMatrix<T> {
@@ -133,7 +150,7 @@ impl<T: Clone> DokMatrix<T> {
         let mut it = indices.into_iter().peekable();
 
         for i in 0..self.rows {
-            csr.row_index.push(csr.col_index.len());
+            csr.row_index[i] = csr.col_index.len();
             while let Some((x, _)) = it.peek() {
                 if *x != i {
                     break;
@@ -144,8 +161,7 @@ impl<T: Clone> DokMatrix<T> {
             }
         }
 
-        csr.row_index.push(csr.col_index.len());
-        assert_eq!(csr.row_index.len(), csr.rows + 1);
+        csr.row_index[self.rows] = csr.col_index.len();
         csr
     }
 
@@ -157,7 +173,7 @@ impl<T: Clone> DokMatrix<T> {
         let mut it = indices.into_iter().peekable();
 
         for j in 0..self.cols {
-            csc.col_index.push(csc.row_index.len());
+            csc.col_index[j] = csc.row_index.len();
             while let Some((y, _)) = it.peek() {
                 if **y != j {
                     break;
@@ -168,8 +184,7 @@ impl<T: Clone> DokMatrix<T> {
             }
         }
 
-        csc.col_index.push(csc.row_index.len());
-        assert_eq!(csc.col_index.len(), csc.cols + 1);
+        csc.col_index[self.cols] = csc.row_index.len();
         csc
     }
 }
@@ -204,12 +219,21 @@ impl<T> AsRef<HashMap<(usize, usize), T>> for DokMatrix<T> {
     }
 }
 
+impl<T> MatrixDimensions for DokMatrix<T> {
+    fn rows(&self) -> usize {
+        self.rows
+    }
+
+    fn columns(&self) -> usize {
+        self.cols
+    }
+}
+
 // --- CscMatrix ---------------------------------------------------------------
 
 #[derive(Debug, Clone)]
 pub struct CscMatrix<T> {
-    pub rows: usize,
-    pub cols: usize,
+    rows: usize,
     data: Vec<T>,
     col_index: Vec<usize>,
     row_index: Vec<usize>,
@@ -219,10 +243,9 @@ impl<T> CscMatrix<T> {
     fn new(rows: usize, cols: usize) -> Self {
         CscMatrix {
             rows,
-            cols,
             data: Vec::new(),
-            col_index: Vec::new(),
-            row_index: Vec::with_capacity(rows),
+            row_index: Vec::new(),
+            col_index: vec![0; cols + 1],
         }
     }
 
@@ -235,7 +258,6 @@ impl<T> Default for CscMatrix<T> {
     fn default() -> Self {
         Self {
             rows: 0,
-            cols: 0,
             data: Vec::new(),
             col_index: Vec::new(),
             row_index: Vec::new(),
@@ -243,12 +265,21 @@ impl<T> Default for CscMatrix<T> {
     }
 }
 
+impl<T> MatrixDimensions for CscMatrix<T> {
+    fn rows(&self) -> usize {
+        self.rows
+    }
+
+    fn columns(&self) -> usize {
+        self.col_index.len() - 1
+    }
+}
+
 // --- CsrMatrix ---------------------------------------------------------------
 
 #[derive(Debug, Clone)]
 pub struct CsrMatrix<T> {
-    pub rows: usize,
-    pub cols: usize,
+    cols: usize,
     data: Vec<T>,
     col_index: Vec<usize>,
     row_index: Vec<usize>,
@@ -257,11 +288,10 @@ pub struct CsrMatrix<T> {
 impl<T> CsrMatrix<T> {
     fn new(rows: usize, cols: usize) -> Self {
         CsrMatrix {
-            rows,
             cols,
             data: Vec::new(),
             col_index: Vec::new(),
-            row_index: Vec::with_capacity(rows),
+            row_index: vec![0; rows + 1],
         }
     }
 
@@ -274,9 +304,9 @@ impl<T: Add<Output = T> + Mul<Output = T> + PartialEq + Clone> CsrMatrix<T> {
     pub fn dot(&self, rhs: &CscMatrix<T>) -> DokMatrix<T> {
         assert_eq!(self.cols, rhs.rows);
 
-        let mut out = DokMatrix::new(self.rows, rhs.cols);
+        let mut out = DokMatrix::new(self.rows(), rhs.columns());
 
-        for i in 0..self.rows {
+        for i in 0..self.rows() {
             if self.row_index[i] == self.row_index[i + 1] {
                 continue;
             }
@@ -284,7 +314,7 @@ impl<T: Add<Output = T> + Mul<Output = T> + PartialEq + Clone> CsrMatrix<T> {
             let row_cols = &self.col_index[self.row_index[i]..self.row_index[i + 1]];
             let row_data = &self.data[self.row_index[i]..self.row_index[i + 1]];
 
-            for j in 0..rhs.cols {
+            for j in 0..rhs.columns() {
                 if rhs.col_index[j] == rhs.col_index[j + 1] {
                     continue;
                 }
@@ -326,12 +356,21 @@ impl<T: Add<Output = T> + Mul<Output = T> + PartialEq + Clone> CsrMatrix<T> {
 impl<T> Default for CsrMatrix<T> {
     fn default() -> Self {
         Self {
-            rows: 0,
             cols: 0,
             data: Vec::new(),
             col_index: Vec::new(),
             row_index: Vec::new(),
         }
+    }
+}
+
+impl<T> MatrixDimensions for CsrMatrix<T> {
+    fn rows(&self) -> usize {
+        self.row_index.len() - 1
+    }
+
+    fn columns(&self) -> usize {
+        self.cols
     }
 }
 

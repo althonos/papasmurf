@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 
 use lightmotif::abc::Dna;
-use lightmotif::pli::BestPosition;
+use lightmotif::pli::Maximum;
 use lightmotif::pli::Encode;
 use lightmotif::pli::Score;
 use lightmotif::pli::Threshold;
@@ -88,7 +88,7 @@ impl DatabaseBuilder {
                 $pli.score_into(&$striped, &$primer.profile, &mut $scores);
                 $pos = 0;
                 $mm = usize::MAX;
-                // $pos = $pli.best_position(&$scores).unwrap();
+                // $pos = $pli.argmax(&$scores).unwrap();
                 // $mm = $primer.mismatches(&$seq[$pos..$pos + $primer.len()]);
                 let mut indices = $pli.threshold(&$scores, 0.0);
                 for i in indices {
@@ -206,6 +206,11 @@ impl DatabaseBuilder {
         let mut amplified = vec![0; names.len()];
         let mut regions = Vec::with_capacity(self.primers.len());
         for (primer, kmers) in self.primers.iter().zip(self.kmers.iter()) {
+            // Count amplified regions per reference sequence
+            for kmer in kmers.iter() {
+                amplified[names[&kmer.id]] += 1;
+            }
+
             // Extract unique kmers
             let unique = kmers
                 .iter()
@@ -213,11 +218,6 @@ impl DatabaseBuilder {
                 .cloned()
                 .collect::<Paired<HashSet<_>>>()
                 .map(OrderedSet::from);
-
-            // Count amplified per region
-            for kmer in kmers.iter() {
-                amplified[names[&kmer.id]] += 1;
-            }
 
             // Encode reference kmers with indices.
             let entries = kmers
