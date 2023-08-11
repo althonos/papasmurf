@@ -276,7 +276,9 @@ impl<T> CooMatrix<T> {
         assert!(j < self.cols);
 
         if self.nnz() > 0 {
-            assert!( (&i, &j) > (self.i.last().unwrap(), self.j.last().unwrap()) );
+            let last_i = *self.i.last().unwrap();
+            let last_j = *self.j.last().unwrap();
+            assert!( (i, j) > (last_i, last_j), "{:?} > {:?}", (i, j), (last_i, last_j) );
         }
 
         self.i.push(i);

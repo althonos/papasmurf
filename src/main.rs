@@ -44,69 +44,7 @@ use lightmotif::pli::Threshold;
 
 
 
-fn simd_mismatches(query: &[u8], db: &Matrix<u8>, out: &mut [u8]) {
-    use std::arch::x86_64::*;
-    unsafe {
-        let mut k = db.rows();
 
-        let mut c = 0;
-
-        let ones = _mm256_set1_epi8(1);
-
-        while c + std::mem::size_of::<__m256i>() * 4 < db.columns() {
-            let mut m1 = _mm256_setzero_si256();
-            let mut m2 = _mm256_setzero_si256();
-            let mut m3 = _mm256_setzero_si256();
-            let mut m4 = _mm256_setzero_si256();
-
-            for i in 0..query.len() {
-                if query[i] != b'N' {
-                    let mut q = _mm256_set1_epi8(query[i] as i8);
-                    let mut r1 = _mm256_load_si256(db[i].as_ptr().add(c) as *const _);
-                    let mut r2 = _mm256_load_si256(db[i].as_ptr().add(c + 32) as *const _);
-                    let mut r3 = _mm256_load_si256(db[i].as_ptr().add(c + 64) as *const _);
-                    let mut r4 = _mm256_load_si256(db[i].as_ptr().add(c + 96) as *const _);
-                    m1 = _mm256_add_epi8(m1, _mm256_andnot_si256(_mm256_cmpeq_epi8(q, r1), ones));
-                    m2 = _mm256_add_epi8(m2, _mm256_andnot_si256(_mm256_cmpeq_epi8(q, r2), ones));
-                    m3 = _mm256_add_epi8(m3, _mm256_andnot_si256(_mm256_cmpeq_epi8(q, r3), ones));
-                    m4 = _mm256_add_epi8(m4, _mm256_andnot_si256(_mm256_cmpeq_epi8(q, r4), ones));
-                }
-            }
-
-            _mm256_storeu_si256(out.as_mut_ptr().add(c) as *mut _, m1);
-            _mm256_storeu_si256(out.as_mut_ptr().add(c + 32) as *mut _, m2);
-            _mm256_storeu_si256(out.as_mut_ptr().add(c + 64) as *mut _, m3);
-            _mm256_storeu_si256(out.as_mut_ptr().add(c + 96) as *mut _, m4);
-            c += std::mem::size_of::<__m256i>() * 4;
-        }
-
-        while c + std::mem::size_of::<__m256i>() < db.columns() {
-            let mut m1 = _mm256_setzero_si256();
-
-            for i in 0..query.len() {
-                if query[i] != b'N' {
-                    let q = _mm256_set1_epi8(query[i] as i8);
-                    let r1 = _mm256_load_si256(db[i][c..].as_ptr() as *const _);
-                    m1 = _mm256_add_epi8(m1, _mm256_andnot_si256(_mm256_cmpeq_epi8(q, r1), ones));
-                }
-            }
-
-            _mm256_storeu_si256(out[c..].as_mut_ptr() as *mut _, m1);
-            c += std::mem::size_of::<__m256i>();
-        }
-
-        while c < db.columns() {
-            let mut m = 0;
-            for i in 0..query.len() {
-                if query[i] != b'N' && query[i] != db[i][c] {
-                    m += 1;
-                }
-            }
-            out[c] = m;
-            c += 1;
-        }
-    }
-}
 
 fn main() {
     // --- FILL DATABASE
@@ -259,142 +197,146 @@ fn main() {
         .map(Paired::from)
         .enumerate()
     {
-        for e in mapper.expected.iter_mut() {
-            e.grow(1, 0);
-        }
-
-        let read = res.map(Result::unwrap);
-        // if read.forward.seq().len() <= builder.k || read.backward.seq().len() <= builder.k {
-        //     continue;
-        // }
-
-        // let mut striped = read
-        //     .as_ref()
-        //     .map(|r| pli.encode(r.sequence.as_bytes()))
-        //     .map(Result::unwrap)
-        //     .map(lightmotif::seq::EncodedSequence::<lightmotif::Dna>::from)
-        //     .map(|e| e.to_striped::<lightmotif::num::U32>());
-        // striped.as_mut().map(|s| s.configure_wrap(builder.k));
-
-        let seq = read.as_ref().map(|r| &r.sequence);
-        let (r, pos, primer_mismatches) = db
-        // let (r, pos) = db
-            .regions
-            .iter()
-            .enumerate()
-            // .map(|(r, region)| {
-            //     pli.score_into(&striped.forward, &region.profile.forward, &mut scores);
-            //     let fwd_pos = pli.argmax(&scores).unwrap();
-            //     let fwd_score = scores[fwd_pos];
-
-            //     pli.score_into(&striped.backward, &region.profile.backward, &mut scores);
-            //     let bwd_pos = pli.argmax(&scores).unwrap();
-            //     let bwd_score = scores[bwd_pos];
-
-            //     (r, Paired::new((fwd_pos, fwd_score), (bwd_pos, bwd_score)))
-            // })
-            // .max_by(|(_, p1), (_, p2)| {
-            //     (p1.forward.1 + p2.backward.1)
-            //         .partial_cmp(&(p2.forward.1 + p2.backward.1))
-            //         .unwrap()
-            // })
-            // .map(|(r, p)| (r, p.map(|x| x.0)))
-            // .unwrap();
-            .map(|(r, region)| {
-                (
-                    r,
-                    (0..seq.forward.len() - region.primer.forward.len())
-                        .map(|i| (i, region.primer.forward.mismatches(&seq.forward[i..i + region.primer.forward.len()])))
-                        .min_by_key(|(_, s)| *s)
-                        .unwrap(),
-                    (0..seq.backward.len() - region.primer.backward.len())
-                        .map(|i| (i, region.primer.backward.reverse_complement().mismatches(&seq.backward[i..i + region.primer.backward.len()])))
-                        .min_by_key(|(_, s)| *s)
-                        .unwrap(),
-                )
-            })
-            .min_by(|x, y| (x.1.1 + x.2.1).partial_cmp(&(y.1.1 + y.2.1)).unwrap())
-            .map(|x| (x.0, Paired::new(x.1.0, x.2.0), Paired::new(x.1.1, x.2.1)))
-            .unwrap();
-
-        if primer_mismatches.forward > 2 || primer_mismatches.backward > 2 {
-            continue
-        }
-        let mut kmer = Paired::new(
-            &seq.forward[pos.forward + db.regions[r].primer.forward.len()..],
-            &seq.backward[pos.backward + db.regions[r].primer.backward.len()..],
-        );
-        // let mut kmer = Paired::new(
-        //     &seq.forward[pos.forward..], 
-        //     &seq.backward[pos.backward..]
-        // );
-        if kmer.forward.len() > db.k {
-            kmer.forward = &kmer.forward[..db.k];
-        }
-        if kmer.backward.len() > db.k {
-            kmer.backward = &kmer.backward[..db.k];
-        }
-        
-        // if pos.forward + builder.k > read.forward.seq().len() {
-        //     println!("{:?}", &pos.backward);
-        //     continue;
-        // }
-        // if pos.backward + builder.k > read.backward.seq().len() {
-        //     println!("{:?}", &pos.backward);
-        //     continue;
-        // }
-
-        // let mut kmer = Paired::new(
-        //     if pos.forward + builder.k > read.forward.seq().len() {
-        //         &read.forward.seq()[pos.forward..]
-        //     } else {
-        //         &read.forward.seq()[pos.forward..pos.forward + builder.k]
-        //     },
-        //     if pos.backward + builder.k > read.backward.seq().len() {
-        //         &read.backward.seq()[pos.backward..]
-        //     } else {
-        //         &read.backward.seq()[pos.backward..pos.backward + builder.k]
-        //     }
-        // );
-
-        let mut mismatch = db.regions[r]
-            .kmers
-            .as_ref()
-            .map(|block| vec![0u8; block.columns()]);
-        simd_mismatches(
-            kmer.forward.as_bytes(),
-            &db.regions[r].kmers.forward,
-            &mut mismatch.forward,
-        );
-        simd_mismatches(
-            kmer.backward.as_bytes(),
-            &db.regions[r].kmers.backward,
-            &mut mismatch.backward,
-        );
-
-        let mut mapped = false;
-        for entry in db.regions[r].entries.iter() {
-            let mm = Paired::new(
-                mismatch.forward[entry.kmer_index.forward],
-                mismatch.backward[entry.kmer_index.backward],
-            );
-            const PE: f32 = 0.005;
-            let ne = (mm.forward + mm.backward) as f32;
-            let l = kmer.forward.len() + kmer.backward.len();
-            let e = (PE / 3.0).powf(ne) * (1.0 - PE).powf(l as f32 - ne);
-            if e > 0.0 && ne <= 2.0 {
-                mapper.expected[r].insert(
-                    i,
-                    db.regions[r].unique_pairs[&entry.kmer_index],
-                    e,
-                );
-                mapped = true;
-            }
-        }
-
-        if mapped {
+        let seq = res.map(Result::unwrap);
+        if mapper.add(seq.as_ref().map(|r| r.sequence.as_str())) {
             mapped_reads += 1;
         }
+        // for e in mapper.expected.iter_mut() {
+        //     e.grow(1, 0);
+        // }
+
+        // let read = res.map(Result::unwrap);
+        // // if read.forward.seq().len() <= builder.k || read.backward.seq().len() <= builder.k {
+        // //     continue;
+        // // }
+
+        // // let mut striped = read
+        // //     .as_ref()
+        // //     .map(|r| pli.encode(r.sequence.as_bytes()))
+        // //     .map(Result::unwrap)
+        // //     .map(lightmotif::seq::EncodedSequence::<lightmotif::Dna>::from)
+        // //     .map(|e| e.to_striped::<lightmotif::num::U32>());
+        // // striped.as_mut().map(|s| s.configure_wrap(builder.k));
+
+        // let seq = read.as_ref().map(|r| &r.sequence);
+        // let (r, pos, primer_mismatches) = db
+        // // let (r, pos) = db
+        //     .regions
+        //     .iter()
+        //     .enumerate()
+        //     // .map(|(r, region)| {
+        //     //     pli.score_into(&striped.forward, &region.profile.forward, &mut scores);
+        //     //     let fwd_pos = pli.argmax(&scores).unwrap();
+        //     //     let fwd_score = scores[fwd_pos];
+
+        //     //     pli.score_into(&striped.backward, &region.profile.backward, &mut scores);
+        //     //     let bwd_pos = pli.argmax(&scores).unwrap();
+        //     //     let bwd_score = scores[bwd_pos];
+
+        //     //     (r, Paired::new((fwd_pos, fwd_score), (bwd_pos, bwd_score)))
+        //     // })
+        //     // .max_by(|(_, p1), (_, p2)| {
+        //     //     (p1.forward.1 + p2.backward.1)
+        //     //         .partial_cmp(&(p2.forward.1 + p2.backward.1))
+        //     //         .unwrap()
+        //     // })
+        //     // .map(|(r, p)| (r, p.map(|x| x.0)))
+        //     // .unwrap();
+        //     .map(|(r, region)| {
+        //         (
+        //             r,
+        //             (0..seq.forward.len() - region.primer.forward.len())
+        //                 .map(|i| (i, region.primer.forward.mismatches(&seq.forward[i..i + region.primer.forward.len()])))
+        //                 .min_by_key(|(_, s)| *s)
+        //                 .unwrap(),
+        //             (0..seq.backward.len() - region.primer.backward.len())
+        //                 .map(|i| (i, region.primer.backward.reverse_complement().mismatches(&seq.backward[i..i + region.primer.backward.len()])))
+        //                 .min_by_key(|(_, s)| *s)
+        //                 .unwrap(),
+        //         )
+        //     })
+        //     .min_by(|x, y| (x.1.1 + x.2.1).partial_cmp(&(y.1.1 + y.2.1)).unwrap())
+        //     .map(|x| (x.0, Paired::new(x.1.0, x.2.0), Paired::new(x.1.1, x.2.1)))
+        //     .unwrap();
+
+        // if primer_mismatches.forward > 2 || primer_mismatches.backward > 2 {
+        //     continue
+        // }
+        // let mut kmer = Paired::new(
+        //     &seq.forward[pos.forward + db.regions[r].primer.forward.len()..],
+        //     &seq.backward[pos.backward + db.regions[r].primer.backward.len()..],
+        // );
+        // // let mut kmer = Paired::new(
+        // //     &seq.forward[pos.forward..], 
+        // //     &seq.backward[pos.backward..]
+        // // );
+        // if kmer.forward.len() > db.k {
+        //     kmer.forward = &kmer.forward[..db.k];
+        // }
+        // if kmer.backward.len() > db.k {
+        //     kmer.backward = &kmer.backward[..db.k];
+        // }
+        
+        // // if pos.forward + builder.k > read.forward.seq().len() {
+        // //     println!("{:?}", &pos.backward);
+        // //     continue;
+        // // }
+        // // if pos.backward + builder.k > read.backward.seq().len() {
+        // //     println!("{:?}", &pos.backward);
+        // //     continue;
+        // // }
+
+        // // let mut kmer = Paired::new(
+        // //     if pos.forward + builder.k > read.forward.seq().len() {
+        // //         &read.forward.seq()[pos.forward..]
+        // //     } else {
+        // //         &read.forward.seq()[pos.forward..pos.forward + builder.k]
+        // //     },
+        // //     if pos.backward + builder.k > read.backward.seq().len() {
+        // //         &read.backward.seq()[pos.backward..]
+        // //     } else {
+        // //         &read.backward.seq()[pos.backward..pos.backward + builder.k]
+        // //     }
+        // // );
+
+        // let mut mismatch = db.regions[r]
+        //     .kmers
+        //     .as_ref()
+        //     .map(|block| vec![0u8; block.columns()]);
+        // simd_mismatches(
+        //     kmer.forward.as_bytes(),
+        //     &db.regions[r].kmers.forward,
+        //     &mut mismatch.forward,
+        // );
+        // simd_mismatches(
+        //     kmer.backward.as_bytes(),
+        //     &db.regions[r].kmers.backward,
+        //     &mut mismatch.backward,
+        // );
+
+        // let mut mapped = false;
+        // for entry in db.regions[r].entries.iter() {
+        //     let mm = Paired::new(
+        //         mismatch.forward[entry.kmer_index.forward],
+        //         mismatch.backward[entry.kmer_index.backward],
+        //     );
+        //     const PE: f32 = 0.005;
+        //     let ne = (mm.forward + mm.backward) as f32;
+        //     let l = kmer.forward.len() + kmer.backward.len();
+        //     let e = (PE / 3.0).powf(ne) * (1.0 - PE).powf(l as f32 - ne);
+        //     if e > 0.0 && ne <= 2.0 {
+        //         mapper.expected[r].insert(
+        //             i,
+        //             db.regions[r].unique_pairs[&entry.kmer_index],
+        //             e,
+        //         );
+        //         mapped = true;
+        //     }
+        // }
+
+        // if mapped {
+        //     mapped_reads += 1;
+        // }
         
         // if i > 1000 {
         //     break;
@@ -477,7 +419,7 @@ fn main() {
         })
         .collect::<HashMap<Rc<str>, Rc<str>>>();
 
-    let mut output = std::fs::File::create("/tmp/mapping.tsv")
+    let mut output = std::fs::File::create("/tmp/Q5RES023A1_20230327091114__MC_S7.tsv")
         .unwrap();
 
     println!("Result: ({} reads)", mapped_reads);
