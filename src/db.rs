@@ -24,7 +24,7 @@ use crate::utils::Rc;
 type ScoringMatrix = lightmotif::pwm::ScoringMatrix<lightmotif::Dna>;
 
 #[derive(Debug, Clone)]
-pub struct BuilderKmer {
+struct BuilderEntry {
     pub id: Rc<str>,
     // pub primer: Paired<Rc<str>>,
     pub kmer: Paired<Rc<str>>,
@@ -33,19 +33,15 @@ pub struct BuilderKmer {
 #[derive(Debug, Clone)]
 pub struct DatabaseBuilder {
     /// The size of the k-mers to extract from the reference sequences.
-    pub k: usize,
+    k: usize,
     /// The maximum number of mismatches allowed between the primers and a sequence.
-    pub primer_mismatches: usize,
-
+    primer_mismatches: usize,
     /// The list of primers used to identify the 16S regions.
-    pub primers: Vec<Paired<Primer>>,
-
-    /// The list of k-mers extracted from the sequences so far.
-    pub kmers: Vec<Vec<BuilderKmer>>,
-
+    primers: Vec<Paired<Primer>>,
+    /// The list of entries extracted so far, grouped by region.
+    entries: Vec<Vec<BuilderEntry>>,
     /// A string interner, to avoid re-allocating identitical k-mers.
-    pub interner: Interner<str>,
-
+    interner: Interner<str>,
     /// The number of sequences that have been added to the database.
     n: usize,
 }
@@ -53,14 +49,14 @@ pub struct DatabaseBuilder {
 impl DatabaseBuilder {
     /// Create a new database builder using the given primers.
     pub fn new(primers: Vec<Paired<Primer>>) -> Self {
-        let mut kmers = Vec::with_capacity(primers.len());
+        let mut entries = Vec::with_capacity(primers.len());
         for _ in 0..primers.len() {
-            kmers.push(Vec::new());
+            entries.push(Vec::new());
         }
 
         DatabaseBuilder {
             primers,
-            kmers,
+            entries,
             interner: Default::default(),
             k: 100,
             primer_mismatches: 2,
@@ -178,7 +174,7 @@ impl DatabaseBuilder {
 
             // Add the amplified k-mer to the current region.
             amplified += 1;
-            self.kmers[region].push(BuilderKmer {
+            self.entries[region].push(BuilderEntry {
                 // primer: Paired::new(fwd_rc, bwd_rc),
                 kmer: Paired::new(fwd_kmer, bwd_kmer),
                 id: id_rc.get_or_insert_with(|| id.as_ref().into()).clone(),
@@ -198,38 +194,38 @@ impl DatabaseBuilder {
 
         // Extract the unique names of all the references stored so far.
         let names = self
-            .kmers
+            .entries
             .iter()
-            .flat_map(|kmers| kmers.iter().map(|kmer| &kmer.id))
+            .flat_map(|entries| entries.iter().map(|kmer| &kmer.id))
             .cloned()
             .collect::<OrderedSet<_>>();
 
         // Count how many regions were amplified for each reference.
         let mut amplified = vec![0; names.len()];
-        for kmer in self.kmers.iter().map(|v| v.iter()).flatten() {
+        for kmer in self.entries.iter().map(|v| v.iter()).flatten() {
             amplified[names[&kmer.id]] += 1;
         }
 
         // Group kmers for individual regions
         let mut regions = Vec::with_capacity(self.primers.len());
-        for (primer, kmers) in self.primers.iter().zip(self.kmers.iter()) {
+        for (primer, builder_entries) in self.primers.iter().zip(self.entries.iter()) {
             // Extract unique kmers
-            let unique = kmers
+            let unique = builder_entries
                 .iter()
-                .map(|kmer| &kmer.kmer)
+                .map(|entry| &entry.kmer)
                 .cloned()
                 .collect::<Paired<HashSet<_>>>()
                 .map(OrderedSet::from);
 
             // Encode reference kmers with indices.
-            let entries = kmers
+            let entries = builder_entries
                 .iter()
-                .map(|kmer| DatabaseEntry {
-                    id: names[&kmer.id],
+                .map(|entry| DatabaseEntry {
+                    id: names[&entry.id],
                     // primer: kmer.primer.clone(),
                     kmer_index: Paired::new(
-                        unique.forward[&kmer.kmer.forward],
-                        unique.backward[&kmer.kmer.backward],
+                        unique.forward[&entry.kmer.forward],
+                        unique.backward[&entry.kmer.backward],
                     ),
                 })
                 .collect::<Vec<_>>();
