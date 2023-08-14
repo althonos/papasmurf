@@ -1,9 +1,9 @@
 use super::db::Database;
 use super::matrix::CooMatrix;
 use super::matrix::DokMatrix;
-use super::utils::Paired;
 use super::matrix::Matrix;
 use super::matrix::MatrixDimensions;
+use super::utils::Paired;
 
 fn simd_mismatches(query: &[u8], db: &Matrix<u8>, out: &mut [u8]) {
     use std::arch::x86_64::*;
@@ -86,7 +86,6 @@ impl<'db> Mapper<'db> {
     }
 
     pub fn add(&mut self, read: Paired<&str>) -> bool {
-
         let i = self.expected[0].rows();
 
         // Add a new row to the E_i,h matrices
@@ -94,46 +93,65 @@ impl<'db> Mapper<'db> {
             e.grow(1, 0);
         }
 
-        // 
-        let (r, pos, primer_mismatches) = self.db
-        // let (r, pos) = db
-            .regions
-            .iter()
-            .enumerate()
-            // .map(|(r, region)| {
-            //     pli.score_into(&striped.forward, &region.profile.forward, &mut scores);
-            //     let fwd_pos = pli.argmax(&scores).unwrap();
-            //     let fwd_score = scores[fwd_pos];
-
-            //     pli.score_into(&striped.backward, &region.profile.backward, &mut scores);
-            //     let bwd_pos = pli.argmax(&scores).unwrap();
-            //     let bwd_score = scores[bwd_pos];
-
-            //     (r, Paired::new((fwd_pos, fwd_score), (bwd_pos, bwd_score)))
-            // })
-            // .max_by(|(_, p1), (_, p2)| {
-            //     (p1.forward.1 + p2.backward.1)
-            //         .partial_cmp(&(p2.forward.1 + p2.backward.1))
-            //         .unwrap()
-            // })
-            // .map(|(r, p)| (r, p.map(|x| x.0)))
-            // .unwrap();
-            .map(|(r, region)| {
-                (
-                    r,
-                    (0..read.forward.len() - region.primer.forward.len())
-                        .map(|i| (i, region.primer.forward.mismatches(&read.forward[i..i + region.primer.forward.len()])))
-                        .min_by_key(|(_, s)| *s)
-                        .unwrap(),
-                    (0..read.backward.len() - region.primer.backward.len())
-                        .map(|i| (i, region.primer.backward.reverse_complement().mismatches(&read.backward[i..i + region.primer.backward.len()])))
-                        .min_by_key(|(_, s)| *s)
-                        .unwrap(),
-                )
-            })
-            .min_by(|x, y| (x.1.1 + x.2.1).partial_cmp(&(y.1.1 + y.2.1)).unwrap())
-            .map(|x| (x.0, Paired::new(x.1.0, x.2.0), Paired::new(x.1.1, x.2.1)))
-            .unwrap();
+        //
+        let (r, pos, primer_mismatches) =
+            self.db
+                // let (r, pos) = db
+                .regions
+                .iter()
+                .enumerate()
+                // .map(|(r, region)| {
+                //     pli.score_into(&striped.forward, &region.profile.forward, &mut scores);
+                //     let fwd_pos = pli.argmax(&scores).unwrap();
+                //     let fwd_score = scores[fwd_pos];
+                //     pli.score_into(&striped.backward, &region.profile.backward, &mut scores);
+                //     let bwd_pos = pli.argmax(&scores).unwrap();
+                //     let bwd_score = scores[bwd_pos];
+                //     (r, Paired::new((fwd_pos, fwd_score), (bwd_pos, bwd_score)))
+                // })
+                // .max_by(|(_, p1), (_, p2)| {
+                //     (p1.forward.1 + p2.backward.1)
+                //         .partial_cmp(&(p2.forward.1 + p2.backward.1))
+                //         .unwrap()
+                // })
+                // .map(|(r, p)| (r, p.map(|x| x.0)))
+                // .unwrap();
+                .map(|(r, region)| {
+                    (
+                        r,
+                        (0..read.forward.len() - region.primer.forward.len())
+                            .map(|i| {
+                                (
+                                    i,
+                                    region.primer.forward.mismatches(
+                                        &read.forward[i..i + region.primer.forward.len()],
+                                    ),
+                                )
+                            })
+                            .min_by_key(|(_, s)| *s)
+                            .unwrap(),
+                        (0..read.backward.len() - region.primer.backward.len())
+                            .map(|i| {
+                                (
+                                    i,
+                                    region.primer.backward.reverse_complement().mismatches(
+                                        &read.backward[i..i + region.primer.backward.len()],
+                                    ),
+                                )
+                            })
+                            .min_by_key(|(_, s)| *s)
+                            .unwrap(),
+                    )
+                })
+                .min_by(|x, y| (x.1 .1 + x.2 .1).partial_cmp(&(y.1 .1 + y.2 .1)).unwrap())
+                .map(|x| {
+                    (
+                        x.0,
+                        Paired::new(x.1 .0, x.2 .0),
+                        Paired::new(x.1 .1, x.2 .1),
+                    )
+                })
+                .unwrap();
 
         if primer_mismatches.forward > 2 || primer_mismatches.backward > 2 {
             return false;
@@ -143,7 +161,7 @@ impl<'db> Mapper<'db> {
             &read.backward[pos.backward + self.db.regions[r].primer.backward.len()..],
         );
         // let mut kmer = Paired::new(
-        //     &seq.forward[pos.forward..], 
+        //     &seq.forward[pos.forward..],
         //     &seq.backward[pos.backward..]
         // );
         if kmer.forward.len() > self.db.k {
@@ -152,7 +170,7 @@ impl<'db> Mapper<'db> {
         if kmer.backward.len() > self.db.k {
             kmer.backward = &kmer.backward[..self.db.k];
         }
-        
+
         // if pos.forward + builder.k > read.forward.seq().len() {
         //     println!("{:?}", &pos.backward);
         //     continue;
@@ -201,21 +219,15 @@ impl<'db> Mapper<'db> {
             let l = kmer.forward.len() + kmer.backward.len();
             let e = (PE / 3.0).powf(ne) * (1.0 - PE).powf(l as f32 - ne);
             if e > 0.0 && ne <= 2.0 {
-                self.expected[r].insert(
-                    i,
-                    self.db.regions[r].unique_pairs[&entry.kmer_index],
-                    e,
-                );
+                self.expected[r].insert(i, self.db.regions[r].unique_pairs[&entry.kmer_index], e);
                 mapped = true;
             }
         }
 
         // if mapped {
-            // mapped_reads += 1;
+        // mapped_reads += 1;
         // }
 
         mapped
-
     }
-
 }

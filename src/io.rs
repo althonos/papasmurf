@@ -1,6 +1,6 @@
 use std::io::BufRead;
-use std::io::Read;
 use std::io::BufReader;
+use std::io::Read;
 use std::io::Write;
 
 // --- FASTQ -------------------------------------------------------------------
@@ -122,7 +122,7 @@ impl<R: BufRead> Iterator for FastaReader<R> {
                 Ok(0) => break,
                 Ok(n) => {
                     if sequence[end..].starts_with('>') {
-                        self.cache = Some(Ok(sequence[end+1..].trim_end().to_string()));
+                        self.cache = Some(Ok(sequence[end + 1..].trim_end().to_string()));
                         sequence.truncate(end);
                         break;
                     } else {
@@ -131,7 +131,6 @@ impl<R: BufRead> Iterator for FastaReader<R> {
                         }
                         end = sequence.len();
                     }
-
                 }
             }
         }

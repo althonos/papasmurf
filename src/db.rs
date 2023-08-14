@@ -9,9 +9,9 @@ use lightmotif::pli::Threshold;
 use lightmotif::pwm::CountMatrix;
 use lightmotif::seq::EncodedSequence;
 
-use crate::matrix::Matrix;
-use crate::matrix::DokMatrix;
 use crate::matrix::CscMatrix;
+use crate::matrix::DokMatrix;
+use crate::matrix::Matrix;
 use crate::primer::Primer;
 use crate::seq::mismatches;
 use crate::seq::reverse_complement;

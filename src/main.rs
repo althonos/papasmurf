@@ -3,8 +3,8 @@
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::io::BufRead;
-use std::io::Read;
 use std::io::BufReader;
+use std::io::Read;
 use std::io::Write;
 use std::ops::Add;
 use std::ops::AddAssign;
@@ -15,10 +15,12 @@ use std::str::FromStr;
 
 use papasmurf::db::Database;
 use papasmurf::db::DatabaseBuilder;
+use papasmurf::io::FastaReader;
+use papasmurf::io::FastqReader;
 use papasmurf::mapper::Mapper;
+use papasmurf::matrix::CooMatrix;
 use papasmurf::matrix::CsrMatrix;
 use papasmurf::matrix::DokMatrix;
-use papasmurf::matrix::CooMatrix;
 use papasmurf::matrix::Matrix;
 use papasmurf::matrix::MatrixDimensions;
 use papasmurf::primer::Primer;
@@ -30,21 +32,14 @@ use papasmurf::seq::DesambiguationIterator;
 use papasmurf::utils::Interner;
 use papasmurf::utils::OrderedSet;
 use papasmurf::utils::Paired;
-use papasmurf::io::FastqReader;
-use papasmurf::io::FastaReader;
 use papasmurf::utils::Rc;
 
 use lightmotif::num::Unsigned;
 use lightmotif::num::U32;
-use lightmotif::pli::Maximum;
 use lightmotif::pli::Encode;
+use lightmotif::pli::Maximum;
 use lightmotif::pli::Score;
 use lightmotif::pli::Threshold;
-
-
-
-
-
 
 fn main() {
     // --- FILL DATABASE
@@ -71,7 +66,6 @@ fn main() {
             Primer::new("GGAGGAAGGTGGGGATGAC"),
             Primer::new(reverse_complement("AAGGCCCGGGAACGTATT")),
         ),
-
         // Paired::new(
         //     "TGGCGGACGGGTGAGTAA",
         //     &reverse_complement("CTGCTGCCTCCCGTAGGA"),
@@ -192,11 +186,7 @@ fn main() {
     let mut mapper = Mapper::new(&db);
     let mut mapped_reads = 0;
 
-    for (i, res) in r1_reader
-        .zip(r2_reader)
-        .map(Paired::from)
-        .enumerate()
-    {
+    for (i, res) in r1_reader.zip(r2_reader).map(Paired::from).enumerate() {
         let seq = res.map(Result::unwrap);
         if mapper.add(seq.as_ref().map(|r| r.sequence.as_str())) {
             mapped_reads += 1;
@@ -267,7 +257,7 @@ fn main() {
         //     &seq.backward[pos.backward + db.regions[r].primer.backward.len()..],
         // );
         // // let mut kmer = Paired::new(
-        // //     &seq.forward[pos.forward..], 
+        // //     &seq.forward[pos.forward..],
         // //     &seq.backward[pos.backward..]
         // // );
         // if kmer.forward.len() > db.k {
@@ -276,7 +266,7 @@ fn main() {
         // if kmer.backward.len() > db.k {
         //     kmer.backward = &kmer.backward[..db.k];
         // }
-        
+
         // // if pos.forward + builder.k > read.forward.seq().len() {
         // //     println!("{:?}", &pos.backward);
         // //     continue;
@@ -337,7 +327,7 @@ fn main() {
         // if mapped {
         //     mapped_reads += 1;
         // }
-        
+
         // if i > 1000 {
         //     break;
         // }
@@ -358,15 +348,17 @@ fn main() {
     }
     // println!("{:?}", q_matrix);
 
-
     // --- ITERATE
-   
+
     println!("Computing π_j vector");
 
-    let pb = indicatif::ProgressBar::new(size as u64)
-        .with_style(indicatif::ProgressStyle::with_template("[{elapsed_precise}] {bar:40.cyan/blue} {pos}/{total} ({per_sec}) {msg}")
-        .unwrap());
-    
+    let pb = indicatif::ProgressBar::new(size as u64).with_style(
+        indicatif::ProgressStyle::with_template(
+            "[{elapsed_precise}] {bar:40.cyan/blue} {pos}/{total} ({per_sec}) {msg}",
+        )
+        .unwrap(),
+    );
+
     let mut pi = vec![1.0; q_matrix.columns()];
     let mut up = vec![0.0; q_matrix.columns()];
     let mut dens = vec![0.0; q_matrix.rows()];
@@ -419,15 +411,13 @@ fn main() {
         })
         .collect::<HashMap<Rc<str>, Rc<str>>>();
 
-    let mut output = std::fs::File::create("/tmp/Q5RES023A1_20230327091114__MC_S7.tsv")
-        .unwrap();
+    let mut output = std::fs::File::create("/tmp/Q5RES023A1_20230327091114__MC_S7.tsv").unwrap();
 
     println!("Result: ({} reads)", mapped_reads);
     for j in 0..xj.len() {
         let name = &db.names[j];
         if xj[j] > 0.0 {
-            writeln!(output, "{}\t{}\t{}", name, &taxonomy[&name.clone()], xj[j])
-                .unwrap();
+            writeln!(output, "{}\t{}\t{}", name, &taxonomy[&name.clone()], xj[j]).unwrap();
         }
         if xj[j] > 0.005 {
             println!("[{}] {}: {:?}", name, &taxonomy[&name.clone()], xj[j]);

@@ -263,7 +263,7 @@ impl<T> CooMatrix<T> {
             cols,
             i: Vec::new(),
             j: Vec::new(),
-            data: Vec::new()
+            data: Vec::new(),
         }
     }
 
@@ -278,7 +278,12 @@ impl<T> CooMatrix<T> {
         if self.nnz() > 0 {
             let last_i = *self.i.last().unwrap();
             let last_j = *self.j.last().unwrap();
-            assert!( (i, j) > (last_i, last_j), "{:?} > {:?}", (i, j), (last_i, last_j) );
+            assert!(
+                (i, j) > (last_i, last_j),
+                "{:?} > {:?}",
+                (i, j),
+                (last_i, last_j)
+            );
         }
 
         self.i.push(i);
@@ -287,8 +292,11 @@ impl<T> CooMatrix<T> {
     }
 
     pub fn iter(&self) -> impl Iterator<Item = (usize, usize, &T)> {
-        self.i.iter().zip(self.j.iter()).zip(self.data.iter())
-            .map(|((i, j), x)| (*i, *j, x) )
+        self.i
+            .iter()
+            .zip(self.j.iter())
+            .zip(self.data.iter())
+            .map(|((i, j), x)| (*i, *j, x))
     }
 
     pub fn grow(&mut self, rows: usize, cols: usize) {
@@ -299,8 +307,6 @@ impl<T> CooMatrix<T> {
 
 impl<T: Clone> CooMatrix<T> {
     pub fn to_csr(&self) -> CsrMatrix<T> {
-
-
         let mut csr = CsrMatrix::new(self.rows, self.cols);
 
         // let mut indices = self.data.keys().collect::<Vec<_>>();
@@ -384,7 +390,7 @@ impl<T: Add<Output = T> + Clone> Add for CooMatrix<T> {
             out.data.push(rhs.data[y].clone());
             y += 1;
         }
-            
+
         out
     }
 }
