@@ -1,11 +1,14 @@
 use std::collections::HashMap;
 use std::ops::AddAssign;
 
+use serde::Deserialize;
+use serde::Serialize;
+
 use super::csc::CscMatrix;
 use super::csr::CsrMatrix;
 use super::MatrixDimensions;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DokMatrix<T> {
     pub(super) data: HashMap<(usize, usize), T>,
     pub(super) rows: usize,

@@ -1,14 +1,14 @@
-use std::ops::Add;
 use std::ops::Index;
 use std::ops::IndexMut;
-use std::ops::Mul;
 
+use serde::Deserialize;
+use serde::Serialize;
 use typenum::Unsigned;
 use typenum::U32;
 
 use super::MatrixDimensions;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DenseMatrix<T: Default + Copy, A: Unsigned = U32> {
     pub(super) data: Vec<T>,
     pub(super) rows: usize,
@@ -51,7 +51,7 @@ impl<T: Default + Copy, A: Unsigned> DenseMatrix<T, A> {
     #[inline]
     pub fn stride(&self) -> usize {
         let x = std::mem::size_of::<T>();
-        let c = self.cols * x;
+        let _c = self.cols * x;
         let b =
             self.cols + (A::USIZE - self.cols % A::USIZE) * ((self.cols % A::USIZE) > 0) as usize;
         b / x + ((b % x) > 0) as usize

@@ -1,6 +1,9 @@
+use serde::Deserialize;
+use serde::Serialize;
+
 use super::MatrixDimensions;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CscMatrix<T> {
     pub(super) rows: usize,
     pub(super) data: Vec<T>,

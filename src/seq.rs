@@ -87,7 +87,7 @@ pub struct DesambiguationIterator<'a> {
 
 impl<'a> DesambiguationIterator<'a> {
     pub fn new(sequence: &'a str) -> Self {
-        let mut buffer = Rc::new(String::new());
+        let buffer = Rc::new(String::new());
         let mut pos = Vec::new();
         let mut state = Vec::new();
         let mut variants = Vec::new();

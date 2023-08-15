@@ -1,7 +1,6 @@
 use std::io::BufRead;
 use std::io::BufReader;
 use std::io::Read;
-use std::io::Write;
 
 // --- FASTQ -------------------------------------------------------------------
 
@@ -106,7 +105,7 @@ impl<R: Read> From<R> for FastaReader<BufReader<R>> {
 impl<R: BufRead> Iterator for FastaReader<R> {
     type Item = Result<FastaRecord, std::io::Error>;
     fn next(&mut self) -> Option<Self::Item> {
-        let mut id = match self.cache.take()? {
+        let id = match self.cache.take()? {
             Ok(id) => id,
             Err(e) => return Some(Err(e)),
         };
@@ -120,7 +119,7 @@ impl<R: BufRead> Iterator for FastaReader<R> {
             match self.reader.read_line(&mut sequence) {
                 Err(e) => return Some(Err(e)),
                 Ok(0) => break,
-                Ok(n) => {
+                Ok(_n) => {
                     if sequence[end..].starts_with('>') {
                         self.cache = Some(Ok(sequence[end + 1..].trim_end().to_string()));
                         sequence.truncate(end);

@@ -1,13 +1,11 @@
-use std::borrow::Borrow;
-use std::collections::HashMap;
 use std::collections::HashSet;
 use std::hash::Hash;
-use std::ops::Index;
-use std::sync::Arc;
-use std::sync::RwLock;
+
+use serde::Deserialize;
+use serde::Serialize;
 
 /// A pair of values for paired-end reads.
-#[derive(Debug, Default, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[derive(Debug, Default, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
 pub struct Paired<T> {
     pub forward: T,
     pub backward: T,

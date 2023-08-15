@@ -1,10 +1,10 @@
 use std::borrow::Borrow;
 use std::collections::HashMap;
 use std::collections::HashSet;
+use std::fmt::Formatter;
+use std::fmt::Result as FmtResult;
 use std::hash::Hash;
 use std::ops::Index;
-use std::sync::Arc;
-use std::sync::RwLock;
 
 /// An immutable ordered set, mapping unique elements to a fixed index.
 #[derive(Debug, Clone)]
@@ -87,5 +87,89 @@ where
     type Output = usize;
     fn index(&self, index: &K) -> &Self::Output {
         &self.indices[index]
+    }
+}
+
+// --- Serde -------------------------------------------------------------------
+
+#[cfg(feature = "serde")]
+mod ser {
+
+    use super::*;
+    use serde::ser::SerializeSeq;
+    use serde::ser::Serializer;
+    use serde::Serialize;
+
+    impl<T: Serialize> Serialize for OrderedSet<T> {
+        fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+        where
+            S: Serializer,
+        {
+            let mut seq = serializer.serialize_seq(Some(self.len()))?;
+            for element in self {
+                seq.serialize_element(element)?;
+            }
+            seq.end()
+        }
+    }
+}
+
+#[cfg(feature = "serde")]
+mod de {
+
+    use super::*;
+    use serde::de::Deserializer;
+    use serde::de::SeqAccess;
+    use serde::de::Visitor;
+    use serde::Deserialize;
+
+    struct OrderedSetVisitor<T> {
+        _marker: std::marker::PhantomData<T>,
+    }
+
+    impl<T> Default for OrderedSetVisitor<T> {
+        fn default() -> Self {
+            Self {
+                _marker: std::marker::PhantomData,
+            }
+        }
+    }
+
+    impl<'de, T> Visitor<'de> for OrderedSetVisitor<T>
+    where
+        T: Clone + Eq + Hash + Deserialize<'de>,
+    {
+        type Value = OrderedSet<T>;
+
+        fn expecting(&self, formatter: &mut Formatter) -> FmtResult {
+            write!(formatter, "a sequence of values")
+        }
+
+        fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
+        where
+            A: SeqAccess<'de>,
+        {
+            let mut data = Vec::with_capacity(seq.size_hint().unwrap_or(0));
+            let mut indices = HashMap::with_capacity(seq.size_hint().unwrap_or(0));
+
+            while let Some(item) = seq.next_element::<T>()? {
+                indices.insert(item.clone(), data.len());
+                data.push(item);
+            }
+
+            Ok(OrderedSet { data, indices })
+        }
+    }
+
+    impl<'de, T> Deserialize<'de> for OrderedSet<T>
+    where
+        T: Clone + Eq + Hash + Deserialize<'de>,
+    {
+        fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+        where
+            D: Deserializer<'de>,
+        {
+            Ok(deserializer.deserialize_seq(OrderedSetVisitor::default())?)
+        }
     }
 }

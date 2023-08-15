@@ -1,5 +1,5 @@
 use super::db::Database;
-use super::matrix::CooMatrix;
+
 use super::matrix::DenseMatrix;
 use super::matrix::DokMatrix;
 use super::matrix::MatrixDimensions;
@@ -8,7 +8,7 @@ use super::utils::Paired;
 fn simd_mismatches(query: &[u8], db: &DenseMatrix<u8>, out: &mut [u8]) {
     use std::arch::x86_64::*;
     unsafe {
-        let mut k = db.rows();
+        let _k = db.rows();
 
         let mut c = 0;
 
@@ -22,11 +22,11 @@ fn simd_mismatches(query: &[u8], db: &DenseMatrix<u8>, out: &mut [u8]) {
 
             for i in 0..query.len() {
                 if query[i] != b'N' {
-                    let mut q = _mm256_set1_epi8(query[i] as i8);
-                    let mut r1 = _mm256_load_si256(db[i].as_ptr().add(c) as *const _);
-                    let mut r2 = _mm256_load_si256(db[i].as_ptr().add(c + 32) as *const _);
-                    let mut r3 = _mm256_load_si256(db[i].as_ptr().add(c + 64) as *const _);
-                    let mut r4 = _mm256_load_si256(db[i].as_ptr().add(c + 96) as *const _);
+                    let q = _mm256_set1_epi8(query[i] as i8);
+                    let r1 = _mm256_load_si256(db[i].as_ptr().add(c) as *const _);
+                    let r2 = _mm256_load_si256(db[i].as_ptr().add(c + 32) as *const _);
+                    let r3 = _mm256_load_si256(db[i].as_ptr().add(c + 64) as *const _);
+                    let r4 = _mm256_load_si256(db[i].as_ptr().add(c + 96) as *const _);
                     m1 = _mm256_add_epi8(m1, _mm256_andnot_si256(_mm256_cmpeq_epi8(q, r1), ones));
                     m2 = _mm256_add_epi8(m2, _mm256_andnot_si256(_mm256_cmpeq_epi8(q, r2), ones));
                     m3 = _mm256_add_epi8(m3, _mm256_andnot_si256(_mm256_cmpeq_epi8(q, r3), ones));

@@ -1,10 +1,13 @@
 use std::cmp::Ordering;
 use std::ops::Add;
 
+use serde::Deserialize;
+use serde::Serialize;
+
 use super::csr::CsrMatrix;
 use super::MatrixDimensions;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CooMatrix<T> {
     pub(super) rows: usize,
     pub(super) cols: usize,
@@ -77,7 +80,7 @@ impl<T: Clone> CooMatrix<T> {
                 if *x != i {
                     break;
                 }
-                let (x, y, z) = it.next().unwrap();
+                let (_x, y, z) = it.next().unwrap();
                 csr.col_index.push(y);
                 csr.data.push(z.clone());
             }

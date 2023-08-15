@@ -1,27 +1,24 @@
-use std::collections::HashMap;
 use std::collections::HashSet;
 
 use lightmotif::abc::Dna;
 use lightmotif::pli::Encode;
-use lightmotif::pli::Maximum;
 use lightmotif::pli::Score;
 use lightmotif::pli::Threshold;
 use lightmotif::pwm::CountMatrix;
 use lightmotif::seq::EncodedSequence;
 
+use serde::Deserialize;
+use serde::Serialize;
+
 use crate::matrix::CscMatrix;
 use crate::matrix::DenseMatrix;
 use crate::matrix::DokMatrix;
 use crate::primer::Primer;
-use crate::seq::mismatches;
 use crate::seq::reverse_complement;
-use crate::seq::DesambiguationIterator;
 use crate::utils::Interner;
 use crate::utils::OrderedSet;
 use crate::utils::Paired;
 use crate::utils::Rc;
-
-type ScoringMatrix = lightmotif::pwm::ScoringMatrix<lightmotif::Dna>;
 
 #[derive(Debug, Clone)]
 struct BuilderEntry {
@@ -88,7 +85,7 @@ impl DatabaseBuilder {
                 $mm = usize::MAX;
                 // $pos = $pli.argmax(&$scores).unwrap();
                 // $mm = $primer.mismatches(&$seq[$pos..$pos + $primer.len()]);
-                let mut indices = $pli.threshold(&$scores, 0.0);
+                let indices = $pli.threshold(&$scores, 0.0);
                 for i in indices {
                     let mm_i = $primer.mismatches(&$seq[i..i + $primer.len()]);
                     if mm_i < $mm || ((mm_i == $mm) && (i < $pos)) {
@@ -269,7 +266,7 @@ impl DatabaseBuilder {
             // Record region
             regions.push(DatabaseRegion {
                 primer: primer.clone(),
-                profile,
+                // profile,
                 entries,
                 unique_pairs,
                 matrix: matrix.to_csc(),
@@ -286,19 +283,19 @@ impl DatabaseBuilder {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DatabaseEntry {
     pub id: usize,
     pub kmer_index: Paired<usize>,
     // pub primer: Paired<Rc<str>>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DatabaseRegion {
     /// The pair of primers defining this region in the database.
     pub primer: Paired<Primer>,
-    /// The pair of PSSMs for matching this region.
-    pub profile: Paired<lightmotif::ScoringMatrix<lightmotif::Dna>>,
+    // /// The pair of PSSMs for matching this region.
+    // pub profile: Paired<lightmotif::ScoringMatrix<lightmotif::Dna>>,
     // /// The set of unique k-mers in this region.
     // pub unique_kmers: Paired<OrderedSet<Rc<str>>>,
     /// The set of unique k-mer pairs in this region.
@@ -311,7 +308,7 @@ pub struct DatabaseRegion {
     pub matrix: CscMatrix<f32>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Database {
     /// The size of the k-mers to extract from the reference sequences.
     pub k: usize,

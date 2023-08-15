@@ -2,11 +2,14 @@ use std::cmp::Ordering;
 use std::ops::Add;
 use std::ops::Mul;
 
+use serde::Deserialize;
+use serde::Serialize;
+
 use super::coo::CooMatrix;
 use super::csc::CscMatrix;
 use super::MatrixDimensions;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CsrMatrix<T> {
     pub(super) cols: usize,
     pub(super) data: Vec<T>,
@@ -111,7 +114,6 @@ impl<T> MatrixDimensions for CsrMatrix<T> {
 mod test {
 
     use super::super::dok::DokMatrix;
-    use super::*;
 
     #[test]
     fn csr_csc_dot() {
