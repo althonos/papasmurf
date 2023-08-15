@@ -7,20 +7,13 @@ use serde::Serialize;
 use crate::matrix::CscMatrix;
 use crate::matrix::DenseMatrix;
 use crate::primer::Primer;
+use crate::utils::Interner;
 use crate::utils::OrderedSet;
 use crate::utils::Paired;
 use crate::utils::Rc;
-use crate::utils::Interner;
 
 pub use self::builder::Builder;
 pub use self::kmers::Kmers;
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Entry {
-    pub j: usize,
-    pub h: usize,
-    // pub primer: Paired<Rc<str>>,
-}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Region {
@@ -30,9 +23,7 @@ pub struct Region {
     pub unique_pairs: OrderedSet<Paired<usize>>,
     /// A dense, aligned matrix storing unique forward and backward k-mers.
     pub unique_kmers: Paired<Kmers>,
-    /// The individual reference entries in this region.
-    pub entries: Vec<Entry>,
-    /// A sparse matrix storing the k-mer to reference correspondance.
+    /// A sparse matrix storing the k-mer pair for each database reference.
     pub matrix: CscMatrix<f32>,
 }
 

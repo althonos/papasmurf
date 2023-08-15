@@ -17,7 +17,6 @@ use crate::utils::Paired;
 use crate::utils::Rc;
 
 use super::Database;
-use super::Entry;
 use super::Region;
 
 #[derive(Debug, Clone)]
@@ -209,44 +208,14 @@ impl Builder {
             let unique_pairs: OrderedSet<Paired<usize>> = sketches
                 .iter()
                 .map(|sketch| &sketch.kmer)
-                .map(|kmer| Paired::new(
-                    unique.forward[&kmer.forward],
-                    unique.backward[&kmer.backward]
-                ))
+                .map(|kmer| {
+                    Paired::new(
+                        unique.forward[&kmer.forward],
+                        unique.backward[&kmer.backward],
+                    )
+                })
                 .collect::<HashSet<Paired<_>>>()
                 .into();
-
-            // Encode reference kmers with indices.
-            let entries = sketches
-                .iter()
-                .map(|sketch| Entry {
-                    // primer: kmer.primer.clone(),
-                    j: names[&sketch.id],
-                    h: unique_pairs[&Paired::new(
-                        unique.forward[&sketch.kmer.forward],
-                        unique.backward[&sketch.kmer.backward],
-                    )],
-                })
-                .collect::<Vec<_>>();
-
-            // // Extract unique kmer pairs.
-            // let unique_pairs = entries
-            //     .iter()
-            //     .map(|sketch| &sketch.kmer_index)
-            //     .cloned()
-            //     .collect::<OrderedSet<_>>();
-
-            // // Build PSSMs from the kmer block.
-            // let _profile = unique.as_ref().map(|x| {
-            //     x.iter()
-            //         .map(AsRef::as_ref)
-            //         .map(EncodedSequence::<Dna>::encode)
-            //         .map(Result::unwrap)
-            //         .collect::<Result<CountMatrix<Dna>, _>>()
-            //         .expect("sequences stored in the builder should be unambiguous DNA")
-            //         .to_freq(0.1)
-            //         .to_scoring(None)
-            // });
 
             // Build dense storage for the kmers
             let unique_kmers = unique.as_ref().map(|kmers| {
@@ -261,9 +230,14 @@ impl Builder {
 
             // Build M_hj matrix
             let mut matrix = DokMatrix::new(unique_pairs.len(), names.len());
-            for sketch in entries.iter() {
-                if amplified[sketch.j] > 0 {
-                    matrix.insert(sketch.h, sketch.j, 1.0 / amplified[sketch.j] as f32);
+            for sketch in sketches.iter() {
+                let j = names[&sketch.id];
+                let h = unique_pairs[&Paired::new(
+                    unique.forward[&sketch.kmer.forward],
+                    unique.backward[&sketch.kmer.backward],
+                )];
+                if amplified[j] > 0 {
+                    matrix.insert(h, j, 1.0 / amplified[j] as f32);
                 }
             }
 
@@ -271,7 +245,7 @@ impl Builder {
             regions.push(Region {
                 primer: primer.clone(),
                 // profile,
-                entries,
+                // entries,
                 unique_pairs,
                 matrix: matrix.to_csc(),
                 unique_kmers,

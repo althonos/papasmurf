@@ -13,8 +13,8 @@ use std::ops::IndexMut;
 use std::ops::Mul;
 use std::str::FromStr;
 
+use papasmurf::db::Builder;
 use papasmurf::db::Database;
-use papasmurf::db::DatabaseBuilder;
 use papasmurf::io::FastaReader;
 use papasmurf::io::FastqReader;
 use papasmurf::mapper::Mapper;
@@ -22,6 +22,7 @@ use papasmurf::matrix::CooMatrix;
 use papasmurf::matrix::CsrMatrix;
 use papasmurf::matrix::DokMatrix;
 use papasmurf::matrix::MatrixDimensions;
+use papasmurf::matrix::NonZeroElements;
 use papasmurf::primer::Primer;
 use papasmurf::seq::count_ambiguous;
 use papasmurf::seq::dna_match;
@@ -41,113 +42,128 @@ use lightmotif::pli::Score;
 use lightmotif::pli::Threshold;
 
 fn main() {
-    // --- FILL DATABASE
+    let path = std::path::PathBuf::from("/tmp/db.json");
 
-    // Create a new database builder from the given primers
-    let mut builder = DatabaseBuilder::new(vec![
-        Paired::new(
-            Primer::new("TGGCGAACGGGTGAGTAA"),
-            Primer::new(reverse_complement("CCGTGTCTCAGTCCCARTG")),
-        ),
-        Paired::new(
-            Primer::new("ACTCCTACGGGAGGCAGC"),
-            Primer::new(reverse_complement("GTATTACCGCGGCTGCTG")),
-        ),
-        Paired::new(
-            Primer::new("GTGTAGCGGTGRAATGCG"),
-            Primer::new(reverse_complement("CCCGTCAATTCMTTTGAGTT")),
-        ),
-        Paired::new(
-            Primer::new("GGAGCATGTGGWTTAATTCGA"),
-            Primer::new(reverse_complement("CGTTGCGGGACTTAACCC")),
-        ),
-        Paired::new(
-            Primer::new("GGAGGAAGGTGGGGATGAC"),
-            Primer::new(reverse_complement("AAGGCCCGGGAACGTATT")),
-        ),
-        // Paired::new(
-        //     "TGGCGGACGGGTGAGTAA",
-        //     &reverse_complement("CTGCTGCCTCCCGTAGGA"),
-        // )
-        // .map(Primer::new),
-        // Paired::new(
-        //     "TCCTACGGGAGGCAGCAG",
-        //     &reverse_complement("TATTACCGCGGCTGCTGG"),
-        // )
-        // .map(Primer::new),
-        // Paired::new(
-        //     "CAGCAGCCGCGGTAATAC",
-        //     &reverse_complement("CGCATTTCACCGCTACAC"),
-        // )
-        // .map(Primer::new),
-        // Paired::new(
-        //     "AGGATTAGATACCCTGGT",
-        //     &reverse_complement("GAATTAAACCACATGCTC"),
-        // )
-        // .map(Primer::new),
-        // Paired::new(
-        //     "GCACAAGCGGTGGAGCAT",
-        //     &reverse_complement("CGCTCGTTGCGGGACTTA"),
-        // )
-        // .map(Primer::new),
-        // Paired::new(
-        //     "AGGAAGGTGGGGATGACG",
-        //     &reverse_complement("CCCGGGAACGTATTCACC"),
-        // )
-        // .map(Primer::new),
-    ]);
+    let db: Database = if !path.exists() {
+        // --- FILL DATABASE
 
-    // Load reference sequences
-    const DB: &'static str = "gg_13_5.fasta.gz";
-    // const DB: &'static str = "SILVA_138.1_SSURef_NR99_tax_silva_trunc.fasta.gz";
-    let size = std::fs::metadata(DB).unwrap().len();
-    let pb = indicatif::ProgressBar::new(size as u64)
-        .with_style(indicatif::ProgressStyle::with_template("[{elapsed_precise}] {bar:40.cyan/blue} {bytes}/{total_bytes} ({binary_bytes_per_sec}) {msg}")
-        .unwrap());
-    let reader = std::fs::File::open(DB)
-        .map(|r| pb.wrap_read(r))
-        .map(flate2::read::GzDecoder::new)
-        .map(FastaReader::from)
-        .unwrap();
+        // Create a new database builder from the given primers
+        let mut builder = Builder::new(vec![
+            Paired::new(
+                Primer::new("TGGCGAACGGGTGAGTAA"),
+                Primer::new(reverse_complement("CCGTGTCTCAGTCCCARTG")),
+            ),
+            Paired::new(
+                Primer::new("ACTCCTACGGGAGGCAGC"),
+                Primer::new(reverse_complement("GTATTACCGCGGCTGCTG")),
+            ),
+            Paired::new(
+                Primer::new("GTGTAGCGGTGRAATGCG"),
+                Primer::new(reverse_complement("CCCGTCAATTCMTTTGAGTT")),
+            ),
+            Paired::new(
+                Primer::new("GGAGCATGTGGWTTAATTCGA"),
+                Primer::new(reverse_complement("CGTTGCGGGACTTAACCC")),
+            ),
+            Paired::new(
+                Primer::new("GGAGGAAGGTGGGGATGAC"),
+                Primer::new(reverse_complement("AAGGCCCGGGAACGTATT")),
+            ),
+            // Paired::new(
+            //     "TGGCGGACGGGTGAGTAA",
+            //     &reverse_complement("CTGCTGCCTCCCGTAGGA"),
+            // )
+            // .map(Primer::new),
+            // Paired::new(
+            //     "TCCTACGGGAGGCAGCAG",
+            //     &reverse_complement("TATTACCGCGGCTGCTGG"),
+            // )
+            // .map(Primer::new),
+            // Paired::new(
+            //     "CAGCAGCCGCGGTAATAC",
+            //     &reverse_complement("CGCATTTCACCGCTACAC"),
+            // )
+            // .map(Primer::new),
+            // Paired::new(
+            //     "AGGATTAGATACCCTGGT",
+            //     &reverse_complement("GAATTAAACCACATGCTC"),
+            // )
+            // .map(Primer::new),
+            // Paired::new(
+            //     "GCACAAGCGGTGGAGCAT",
+            //     &reverse_complement("CGCTCGTTGCGGGACTTA"),
+            // )
+            // .map(Primer::new),
+            // Paired::new(
+            //     "AGGAAGGTGGGGATGACG",
+            //     &reverse_complement("CCCGGGAACGTATTCACC"),
+            // )
+            // .map(Primer::new),
+        ]);
 
-    // Extract reference region kmers from all sequences
-    let mut n = 0;
-    for (i, read) in reader.map(Result::unwrap).enumerate() {
-        let n_ambiguous = count_ambiguous(&read.sequence);
-        if n_ambiguous == 0 {
-            builder.add(&read.id, &read.sequence);
-            n += 1;
-        } else if n_ambiguous <= 3 {
-            for dna in DesambiguationIterator::new(&read.sequence) {
-                builder.add(&read.id, &dna);
+        // Load reference sequences
+        const DB: &'static str = "gg_13_5.fasta.gz";
+        // const DB: &'static str = "SILVA_138.1_SSURef_NR99_tax_silva_trunc.fasta.gz";
+        let size = std::fs::metadata(DB).unwrap().len();
+        let pb = indicatif::ProgressBar::new(size as u64)
+                .with_style(indicatif::ProgressStyle::with_template("[{elapsed_precise}] {bar:40.cyan/blue} {bytes}/{total_bytes} ({binary_bytes_per_sec}) {msg}")
+                .unwrap());
+        let reader = std::fs::File::open(DB)
+            .map(|r| pb.wrap_read(r))
+            .map(flate2::read::GzDecoder::new)
+            .map(FastaReader::from)
+            .unwrap();
+
+        // Extract reference region kmers from all sequences
+        let mut n = 0;
+        for (i, read) in reader.map(Result::unwrap).enumerate() {
+            let n_ambiguous = count_ambiguous(&read.sequence);
+            if n_ambiguous == 0 {
+                builder.add(&read.id, &read.sequence);
+                n += 1;
+            } else if n_ambiguous <= 3 {
+                for dna in DesambiguationIterator::new(&read.sequence) {
+                    builder.add(&read.id, &dna);
+                }
+                n += 1;
             }
-            n += 1;
+            if i > 10000 {
+                break;
+            }
         }
-        // if i > 10000 {
-        //     break
-        // }
-    }
 
-    pb.finish_and_clear();
-    println!("Succesfully processed {} sequences", n);
+        pb.finish_and_clear();
+        println!("Succesfully processed {} sequences", n);
 
-    // --- INDEX DATABASE
+        // --- INDEX DATABASE
 
-    println!("Building database");
-    let mut db = builder.to_database();
+        println!("Building database");
+        let db = builder.to_database();
+        let mut f = std::fs::File::create(&path).unwrap();
+        serde_json::to_writer(&mut f, &db).unwrap();
+        db
+    } else {
+        println!("Loading database");
+        let size = std::fs::metadata(&path).unwrap().len();
+        let pb = indicatif::ProgressBar::new(size as u64)
+            .with_style(indicatif::ProgressStyle::with_template("[{elapsed_precise}] {bar:40.cyan/blue} {bytes}/{total_bytes} ({binary_bytes_per_sec}) {msg}")
+            .unwrap());
+        let f = std::fs::File::open(&path).map(|r| pb.wrap_read(r)).unwrap();
+        serde_json::from_reader(f).unwrap()
+    };
 
     println!(
         "Extracted {} unique forward kmers",
         db.regions
             .iter()
-            .map(|x| x.kmers.forward.columns())
+            .map(|x| x.unique_kmers.forward.columns())
             .sum::<usize>()
     );
     println!(
         "Extracted {} unique backward kmers",
         db.regions
             .iter()
-            .map(|x| x.kmers.backward.columns())
+            .map(|x| x.unique_kmers.backward.columns())
             .sum::<usize>()
     );
 

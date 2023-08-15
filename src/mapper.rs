@@ -3,6 +3,7 @@ use super::db::Database;
 use super::matrix::DenseMatrix;
 use super::matrix::DokMatrix;
 use super::matrix::MatrixDimensions;
+use super::matrix::NonZeroElements;
 use super::utils::Paired;
 
 fn simd_mismatches(query: &[u8], db: &DenseMatrix<u8>, out: &mut [u8]) {
@@ -209,22 +210,20 @@ impl<'db> Mapper<'db> {
         );
 
         let mut mapped = false;
-        for entry in self.db.regions[r].entries.iter() {
-            let pair = &self.db.regions[r].unique_pairs[entry.h];
-            let mm = Paired::new(mismatch.forward[pair.forward], mismatch.backward[pair.backward]);
+        for (h, pair) in self.db.regions[r].unique_pairs.iter().enumerate() {
+            let mm = Paired::new(
+                mismatch.forward[pair.forward],
+                mismatch.backward[pair.backward],
+            );
             const PE: f32 = 0.005;
             let ne = (mm.forward + mm.backward) as f32;
             let l = kmer.forward.len() + kmer.backward.len();
             let e = (PE / 3.0).powf(ne) * (1.0 - PE).powf(l as f32 - ne);
             if e > 0.0 && ne <= 2.0 {
-                self.expected[r].insert(i, entry.h, e);
+                self.expected[r].insert(i, h, e);
                 mapped = true;
             }
         }
-
-        // if mapped {
-        // mapped_reads += 1;
-        // }
 
         mapped
     }
