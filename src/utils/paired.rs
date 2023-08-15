@@ -72,7 +72,6 @@ where
 mod ser {
 
     use super::*;
-    use serde::ser::SerializeSeq;
     use serde::ser::SerializeTuple;
     use serde::ser::Serializer;
     use serde::Serialize;

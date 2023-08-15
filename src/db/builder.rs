@@ -17,11 +17,11 @@ use crate::utils::Paired;
 use crate::utils::Rc;
 
 use super::Database;
-use super::DatabaseEntry;
-use super::DatabaseRegion;
+use super::Entry;
+use super::Region;
 
 #[derive(Debug, Clone)]
-struct Entry {
+struct Sketch {
     pub id: Rc<str>,
     // pub primer: Paired<Rc<str>>,
     pub kmer: Paired<Rc<str>>,
@@ -35,8 +35,8 @@ pub struct Builder {
     primer_mismatches: usize,
     /// The list of primers used to identify the 16S regions.
     primers: Vec<Paired<Primer>>,
-    /// The list of entries extracted so far, grouped by region.
-    entries: Vec<Vec<Entry>>,
+    /// The list of sketches extracted so far, grouped by region.
+    sketches: Vec<Vec<Sketch>>,
     /// A string interner, to avoid re-allocating identitical k-mers.
     interner: Interner<str>,
     /// The number of sequences that have been added to the database.
@@ -46,14 +46,14 @@ pub struct Builder {
 impl Builder {
     /// Create a new database builder using the given primers.
     pub fn new(primers: Vec<Paired<Primer>>) -> Self {
-        let mut entries = Vec::with_capacity(primers.len());
+        let mut sketches = Vec::with_capacity(primers.len());
         for _ in 0..primers.len() {
-            entries.push(Vec::new());
+            sketches.push(Vec::new());
         }
 
         Builder {
             primers,
-            entries,
+            sketches,
             interner: Default::default(),
             k: 100,
             primer_mismatches: 2,
@@ -171,7 +171,7 @@ impl Builder {
 
             // Add the amplified k-mer to the current region.
             amplified += 1;
-            self.entries[region].push(Entry {
+            self.sketches[region].push(Sketch {
                 // primer: Paired::new(fwd_rc, bwd_rc),
                 kmer: Paired::new(fwd_kmer, bwd_kmer),
                 id: id_rc.get_or_insert_with(|| id.as_ref().into()).clone(),
@@ -189,7 +189,7 @@ impl Builder {
     pub fn to_database(&self) -> Database {
         // Extract the unique names of all the references stored so far.
         let names = self
-            .entries
+            .sketches
             .iter()
             .flat_map(|entries| entries.iter().map(|kmer| &kmer.id))
             .cloned()
@@ -197,30 +197,30 @@ impl Builder {
 
         // Count how many regions were amplified for each reference.
         let mut amplified = vec![0; names.len()];
-        for kmer in self.entries.iter().map(|v| v.iter()).flatten() {
+        for kmer in self.sketches.iter().map(|v| v.iter()).flatten() {
             amplified[names[&kmer.id]] += 1;
         }
 
         // Group kmers for individual regions
         let mut regions = Vec::with_capacity(self.primers.len());
-        for (primer, builder_entries) in self.primers.iter().zip(self.entries.iter()) {
+        for (primer, sketches) in self.primers.iter().zip(self.sketches.iter()) {
             // Extract unique kmers
-            let unique = builder_entries
+            let unique = sketches
                 .iter()
-                .map(|entry| &entry.kmer)
+                .map(|sketch| &sketch.kmer)
                 .cloned()
                 .collect::<Paired<HashSet<_>>>()
                 .map(OrderedSet::from);
 
             // Encode reference kmers with indices.
-            let entries = builder_entries
+            let entries = sketches
                 .iter()
-                .map(|entry| DatabaseEntry {
-                    id: names[&entry.id],
+                .map(|sketch| Entry {
+                    id: names[&sketch.id],
                     // primer: kmer.primer.clone(),
                     kmer_index: Paired::new(
-                        unique.forward[&entry.kmer.forward],
-                        unique.backward[&entry.kmer.backward],
+                        unique.forward[&sketch.kmer.forward],
+                        unique.backward[&sketch.kmer.backward],
                     ),
                 })
                 .collect::<Vec<_>>();
@@ -228,7 +228,7 @@ impl Builder {
             // Extract unique kmer pairs.
             let unique_pairs = entries
                 .iter()
-                .map(|entry| &entry.kmer_index)
+                .map(|sketch| &sketch.kmer_index)
                 .cloned()
                 .collect::<OrderedSet<_>>();
 
@@ -257,14 +257,14 @@ impl Builder {
 
             // Build M_hj matrix
             let mut matrix = DokMatrix::new(unique_pairs.len(), names.len());
-            for entry in entries.iter() {
-                let h = unique_pairs[&entry.kmer_index];
-                let j = entry.id;
+            for sketch in entries.iter() {
+                let h = unique_pairs[&sketch.kmer_index];
+                let j = sketch.id;
                 matrix.insert(h, j, 1.0 / amplified[j] as f32);
             }
 
             // Record region
-            regions.push(DatabaseRegion {
+            regions.push(Region {
                 primer: primer.clone(),
                 // profile,
                 entries,
