@@ -14,9 +14,12 @@ pub struct OrderedSet<T> {
 }
 
 impl<T> OrderedSet<T> {
+    /// Return the number of items in the ordered set.
     pub fn len(&self) -> usize {
         self.data.len()
     }
+
+    /// Get an iterator over references to objects stored in the set.
     pub fn iter<'a>(&'a self) -> <&'a Self as IntoIterator>::IntoIter {
         (&self).into_iter()
     }

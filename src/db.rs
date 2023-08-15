@@ -190,8 +190,6 @@ impl DatabaseBuilder {
 
     /// Build the final database.
     pub fn to_database(&self) -> Database {
-        let k = self.k;
-
         // Extract the unique names of all the references stored so far.
         let names = self
             .entries
@@ -244,18 +242,20 @@ impl DatabaseBuilder {
                     .map(EncodedSequence::<Dna>::encode)
                     .map(Result::unwrap)
                     .collect::<Result<CountMatrix<Dna>, _>>()
-                    .unwrap()
+                    .expect("sequences stored in the builder should be unambiguous DNA")
                     .to_freq(0.1)
                     .to_scoring(None)
             });
 
             // Build dense storage for the kmers
             let kmer_block = unique.as_ref().map(|kmers| {
-                let mut matrix = Matrix::<u8>::new(kmers.len(), self.k);
+                let mut matrix = Matrix::<u8>::new(self.k, kmers.len());
                 for (i, kmer) in kmers.iter().enumerate() {
-                    matrix[i].copy_from_slice(kmer.as_bytes());
+                    for (j, x) in kmer.as_bytes().iter().enumerate() {
+                        matrix[j][i] = *x;
+                    }
                 }
-                matrix.transpose()
+                matrix
             });
 
             // Build M_hj matrix
@@ -278,7 +278,7 @@ impl DatabaseBuilder {
         }
 
         Database {
-            k,
+            k: self.k,
             regions,
             names,
             amplified,

@@ -32,6 +32,7 @@ impl<T: ?Sized> Default for Interner<T> {
 }
 
 impl<T: ?Sized> Interner<T> {
+    /// Create a new empty interner.
     pub fn new() -> Self {
         Self {
             data: Default::default(),
@@ -55,5 +56,11 @@ impl<T: ?Sized> Interner<T> {
         let arc: Arc<T> = obj.into();
         w.insert(arc.clone(), arc.clone());
         arc
+    }
+
+    /// Remove all stored entries from the interner.
+    pub fn clear(&self) {
+        let mut w = self.data.write().expect("failed to acquired lock");
+        w.clear()
     }
 }
