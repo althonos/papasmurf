@@ -1,4 +1,5 @@
 use std::cmp::Ordering;
+use std::iter::FusedIterator;
 use std::ops::Add;
 use std::ops::Mul;
 
@@ -8,6 +9,7 @@ use serde::Serialize;
 use super::coo::CooMatrix;
 use super::csc::CscMatrix;
 use super::MatrixDimensions;
+use super::NonZeroElements;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CsrMatrix<T> {
@@ -25,10 +27,6 @@ impl<T> CsrMatrix<T> {
             col_index: Vec::new(),
             row_index: vec![0; rows + 1],
         }
-    }
-
-    pub fn nnz(&self) -> usize {
-        self.data.len()
     }
 }
 
@@ -110,10 +108,57 @@ impl<T> MatrixDimensions for CsrMatrix<T> {
     }
 }
 
+pub struct NonZeroIter<'m, T> {
+    matrix: &'m CsrMatrix<T>,
+    row: usize,
+    ptr: usize,
+}
+
+impl<'mx, T> Iterator for NonZeroIter<'mx, T> {
+    type Item = (usize, usize, &'mx T);
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.ptr >= self.matrix.data.len() {
+            return None;
+        }
+        while self.ptr >= self.matrix.row_index[self.row + 1] {
+            if self.row + 1 > self.matrix.row_index.len() {
+                return None;
+            }
+            self.row += 1;
+        }
+        self.ptr += 1;
+        Some((
+            self.row,
+            self.matrix.col_index[self.ptr - 1],
+            &self.matrix.data[self.ptr - 1],
+        ))
+    }
+}
+
+impl<'mx, T> ExactSizeIterator for NonZeroIter<'mx, T> {
+    fn len(&self) -> usize {
+        self.matrix.data.len() - self.ptr
+    }
+}
+
+impl<'mx, T> FusedIterator for NonZeroIter<'mx, T> {}
+
+impl<'m, T: 'm> NonZeroElements<'m, T> for CsrMatrix<T> {
+    type Iter = NonZeroIter<'m, T>;
+    fn non_zero_elements(&'m self) -> Self::Iter {
+        NonZeroIter {
+            row: 0,
+            ptr: 0,
+            matrix: self,
+        }
+    }
+}
+
 #[cfg(test)]
 mod test {
 
     use super::super::dok::DokMatrix;
+    use super::*;
 
     #[test]
     fn csr_csc_dot() {
@@ -128,6 +173,25 @@ mod test {
         assert_eq!(it.next(), Some((0, 1, &2)));
         assert_eq!(it.next(), Some((1, 0, &3)));
         assert_eq!(it.next(), Some((1, 1, &6)));
+        assert_eq!(it.next(), None);
+    }
+
+    #[test]
+    fn non_zero_elements() {
+        let mut m1 = CsrMatrix::<u8>::new(2, 2);
+        let mut it = m1.non_zero_elements();
+        assert_eq!(it.next(), None);
+
+        let mut a = DokMatrix::<u8>::new(2, 2);
+        a.insert(0, 0, 1);
+        a.insert(0, 1, 2);
+        a.insert(1, 0, 3);
+        let m2 = a.to_csr();
+
+        let mut it = m2.non_zero_elements();
+        assert_eq!(it.next(), Some((0, 0, &1)));
+        assert_eq!(it.next(), Some((0, 1, &2)));
+        assert_eq!(it.next(), Some((1, 0, &3)));
         assert_eq!(it.next(), None);
     }
 }

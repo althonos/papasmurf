@@ -1,11 +1,14 @@
 use std::cmp::Ordering;
+use std::iter::FusedIterator;
 use std::ops::Add;
+use std::ops::Range;
 
 use serde::Deserialize;
 use serde::Serialize;
 
 use super::csr::CsrMatrix;
 use super::MatrixDimensions;
+use super::NonZeroElements;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CooMatrix<T> {
@@ -25,10 +28,6 @@ impl<T> CooMatrix<T> {
             j: Vec::new(),
             data: Vec::new(),
         }
-    }
-
-    pub fn nnz(&self) -> usize {
-        self.data.len()
     }
 
     pub fn insert(&mut self, i: usize, j: usize, data: T) {
@@ -152,6 +151,41 @@ impl<T: Add<Output = T> + Clone> Add for CooMatrix<T> {
         }
 
         out
+    }
+}
+
+pub struct NonZeroIter<'m, T> {
+    matrix: &'m CooMatrix<T>,
+    pos: Range<usize>,
+}
+
+impl<'mx, T> Iterator for NonZeroIter<'mx, T> {
+    type Item = (usize, usize, &'mx T);
+    fn next(&mut self) -> Option<Self::Item> {
+        let pos = self.pos.next()?;
+        Some((
+            self.matrix.i[pos],
+            self.matrix.j[pos],
+            &self.matrix.data[pos],
+        ))
+    }
+}
+
+impl<'mx, T> ExactSizeIterator for NonZeroIter<'mx, T> {
+    fn len(&self) -> usize {
+        self.pos.len()
+    }
+}
+
+impl<'mx, T> FusedIterator for NonZeroIter<'mx, T> {}
+
+impl<'m, T: 'm> NonZeroElements<'m, T> for CooMatrix<T> {
+    type Iter = NonZeroIter<'m, T>;
+    fn non_zero_elements(&'m self) -> Self::Iter {
+        NonZeroIter {
+            pos: 0..self.data.len(),
+            matrix: self,
+        }
     }
 }
 

@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::iter::FusedIterator;
 use std::ops::AddAssign;
 
 use serde::Deserialize;
@@ -7,6 +8,7 @@ use serde::Serialize;
 use super::csc::CscMatrix;
 use super::csr::CsrMatrix;
 use super::MatrixDimensions;
+use super::NonZeroElements;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DokMatrix<T> {
@@ -28,10 +30,6 @@ impl<T> DokMatrix<T> {
         assert!(i < self.rows);
         assert!(j < self.cols);
         self.data.insert((i, j), data);
-    }
-
-    pub fn nnz(&self) -> usize {
-        self.data.len()
     }
 
     pub fn grow(&mut self, rows: usize, cols: usize) {
@@ -136,6 +134,34 @@ impl<T> MatrixDimensions for DokMatrix<T> {
     }
 }
 
+pub struct NonZeroIter<'m, T> {
+    it: std::collections::hash_map::Iter<'m, (usize, usize), T>,
+}
+
+impl<'mx, T> Iterator for NonZeroIter<'mx, T> {
+    type Item = (usize, usize, &'mx T);
+    fn next(&mut self) -> Option<Self::Item> {
+        self.it.next().map(|((i, j), x)| (*i, *j, x))
+    }
+}
+
+impl<'mx, T> ExactSizeIterator for NonZeroIter<'mx, T> {
+    fn len(&self) -> usize {
+        self.it.len()
+    }
+}
+
+impl<'mx, T> FusedIterator for NonZeroIter<'mx, T> {}
+
+impl<'m, T: 'm> NonZeroElements<'m, T> for DokMatrix<T> {
+    type Iter = NonZeroIter<'m, T>;
+    fn non_zero_elements(&'m self) -> Self::Iter {
+        NonZeroIter {
+            it: self.data.iter(),
+        }
+    }
+}
+
 #[cfg(test)]
 mod test {
 
@@ -176,5 +202,17 @@ mod test {
         assert_eq!(csc.data, vec![10, 20, 30, 40, 50, 60, 70, 80]);
         assert_eq!(csc.row_index, vec![0, 1, 1, 3, 2, 3, 4, 5]);
         assert_eq!(csc.col_index, vec![0, 2, 4, 7, 8]);
+    }
+
+    #[test]
+    fn non_zero_elements() {
+        let mut dok_matrix = DokMatrix::<u8>::new(4, 6);
+        dok_matrix.insert(0, 0, 10);
+        dok_matrix.insert(1, 3, 40);
+
+        let mut it = dok_matrix.non_zero_elements();
+        assert!(matches!(it.next(), Some((1, 3, &40)) | Some((0, 0, &10))));
+        assert!(matches!(it.next(), Some((1, 3, &40)) | Some((0, 0, &10))));
+        assert_eq!(it.next(), None);
     }
 }

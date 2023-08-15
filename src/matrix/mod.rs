@@ -18,7 +18,7 @@ pub trait MatrixDimensions {
     }
 }
 
-impl<T: MatrixDimensions> MatrixDimensions for &T {
+impl<M: MatrixDimensions> MatrixDimensions for &M {
     fn rows(&self) -> usize {
         (*self).rows()
     }
@@ -29,3 +29,18 @@ impl<T: MatrixDimensions> MatrixDimensions for &T {
         (*self).shape()
     }
 }
+
+pub trait NonZeroElements<'m, T: 'm> {
+    type Iter: Iterator<Item = (usize, usize, &'m T)> + ExactSizeIterator;
+    fn non_zero_elements(&'m self) -> Self::Iter;
+    fn nnz(&'m self) -> usize {
+        self.non_zero_elements().len()
+    }
+}
+
+// impl<'mx, T, M: NonZeroElements<T>> NonZeroElements<'mx, T> for &M {
+//     type IntoIter = <M as NonZeroElements<T>>::IntoIter;
+//     fn non_zero_elements(&'mx self) -> Self::IntoIter {
+//         (*self).non_zero_elements()
+//     }
+// }
