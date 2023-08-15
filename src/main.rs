@@ -21,7 +21,6 @@ use papasmurf::mapper::Mapper;
 use papasmurf::matrix::CooMatrix;
 use papasmurf::matrix::CsrMatrix;
 use papasmurf::matrix::DokMatrix;
-use papasmurf::matrix::Matrix;
 use papasmurf::matrix::MatrixDimensions;
 use papasmurf::primer::Primer;
 use papasmurf::seq::count_ambiguous;

@@ -1,11 +1,11 @@
 use super::db::Database;
 use super::matrix::CooMatrix;
+use super::matrix::DenseMatrix;
 use super::matrix::DokMatrix;
-use super::matrix::Matrix;
 use super::matrix::MatrixDimensions;
 use super::utils::Paired;
 
-fn simd_mismatches(query: &[u8], db: &Matrix<u8>, out: &mut [u8]) {
+fn simd_mismatches(query: &[u8], db: &DenseMatrix<u8>, out: &mut [u8]) {
     use std::arch::x86_64::*;
     unsafe {
         let mut k = db.rows();

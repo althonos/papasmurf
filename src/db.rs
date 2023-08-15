@@ -10,8 +10,8 @@ use lightmotif::pwm::CountMatrix;
 use lightmotif::seq::EncodedSequence;
 
 use crate::matrix::CscMatrix;
+use crate::matrix::DenseMatrix;
 use crate::matrix::DokMatrix;
-use crate::matrix::Matrix;
 use crate::primer::Primer;
 use crate::seq::mismatches;
 use crate::seq::reverse_complement;
@@ -249,7 +249,7 @@ impl DatabaseBuilder {
 
             // Build dense storage for the kmers
             let kmer_block = unique.as_ref().map(|kmers| {
-                let mut matrix = Matrix::<u8>::new(self.k, kmers.len());
+                let mut matrix = DenseMatrix::<u8>::new(self.k, kmers.len());
                 for (i, kmer) in kmers.iter().enumerate() {
                     for (j, x) in kmer.as_bytes().iter().enumerate() {
                         matrix[j][i] = *x;
@@ -306,7 +306,7 @@ pub struct DatabaseRegion {
     /// The individual reference entries in this region.
     pub entries: Vec<DatabaseEntry>,
     /// A dense, aligned matrix storing unique forward and backward k-mers.
-    pub kmers: Paired<Matrix<u8>>,
+    pub kmers: Paired<DenseMatrix<u8>>,
     /// A sparse matrix storing the k-mer to reference correspondance.
     pub matrix: CscMatrix<f32>,
 }
