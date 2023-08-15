@@ -109,9 +109,8 @@ mod de {
     use serde::de::Deserializer;
     use serde::de::Error as DeError;
     use serde::de::Visitor;
-    use serde::ser::Serializer;
+
     use serde::Deserialize;
-    use serde::Serialize;
 
     struct PrimerVisitor;
 

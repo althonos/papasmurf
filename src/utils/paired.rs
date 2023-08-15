@@ -1,9 +1,6 @@
 use std::collections::HashSet;
 use std::hash::Hash;
 
-use serde::Deserialize;
-use serde::Serialize;
-
 /// A pair of values for paired-end reads.
 #[derive(Debug, Default, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct Paired<T> {
@@ -133,10 +130,10 @@ mod de {
         where
             A: SeqAccess<'de>,
         {
-            let mut forward = seq
+            let forward = seq
                 .next_element()?
                 .ok_or_else(|| Error::invalid_length(0, &"a tuple of size 2"))?;
-            let mut backward = seq
+            let backward = seq
                 .next_element()?
                 .ok_or_else(|| Error::invalid_length(1, &"a tuple of size 2"))?;
             Ok(Paired::new(forward, backward))

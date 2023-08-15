@@ -7,10 +7,6 @@ use lightmotif::pli::Threshold;
 use lightmotif::pwm::CountMatrix;
 use lightmotif::seq::EncodedSequence;
 
-use serde::Deserialize;
-use serde::Serialize;
-
-use crate::matrix::CscMatrix;
 use crate::matrix::DenseMatrix;
 use crate::matrix::DokMatrix;
 use crate::primer::Primer;
@@ -20,15 +16,19 @@ use crate::utils::OrderedSet;
 use crate::utils::Paired;
 use crate::utils::Rc;
 
+use super::Database;
+use super::DatabaseEntry;
+use super::DatabaseRegion;
+
 #[derive(Debug, Clone)]
-struct BuilderEntry {
+struct Entry {
     pub id: Rc<str>,
     // pub primer: Paired<Rc<str>>,
     pub kmer: Paired<Rc<str>>,
 }
 
 #[derive(Debug, Clone)]
-pub struct DatabaseBuilder {
+pub struct Builder {
     /// The size of the k-mers to extract from the reference sequences.
     k: usize,
     /// The maximum number of mismatches allowed between the primers and a sequence.
@@ -36,14 +36,14 @@ pub struct DatabaseBuilder {
     /// The list of primers used to identify the 16S regions.
     primers: Vec<Paired<Primer>>,
     /// The list of entries extracted so far, grouped by region.
-    entries: Vec<Vec<BuilderEntry>>,
+    entries: Vec<Vec<Entry>>,
     /// A string interner, to avoid re-allocating identitical k-mers.
     interner: Interner<str>,
     /// The number of sequences that have been added to the database.
     n: usize,
 }
 
-impl DatabaseBuilder {
+impl Builder {
     /// Create a new database builder using the given primers.
     pub fn new(primers: Vec<Paired<Primer>>) -> Self {
         let mut entries = Vec::with_capacity(primers.len());
@@ -51,7 +51,7 @@ impl DatabaseBuilder {
             entries.push(Vec::new());
         }
 
-        DatabaseBuilder {
+        Builder {
             primers,
             entries,
             interner: Default::default(),
@@ -171,7 +171,7 @@ impl DatabaseBuilder {
 
             // Add the amplified k-mer to the current region.
             amplified += 1;
-            self.entries[region].push(BuilderEntry {
+            self.entries[region].push(Entry {
                 // primer: Paired::new(fwd_rc, bwd_rc),
                 kmer: Paired::new(fwd_kmer, bwd_kmer),
                 id: id_rc.get_or_insert_with(|| id.as_ref().into()).clone(),
@@ -233,7 +233,7 @@ impl DatabaseBuilder {
                 .collect::<OrderedSet<_>>();
 
             // Build PSSMs from the kmer block.
-            let profile = unique.as_ref().map(|x| {
+            let _profile = unique.as_ref().map(|x| {
                 x.iter()
                     .map(AsRef::as_ref)
                     .map(EncodedSequence::<Dna>::encode)
@@ -281,41 +281,4 @@ impl DatabaseBuilder {
             amplified,
         }
     }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct DatabaseEntry {
-    pub id: usize,
-    pub kmer_index: Paired<usize>,
-    // pub primer: Paired<Rc<str>>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct DatabaseRegion {
-    /// The pair of primers defining this region in the database.
-    pub primer: Paired<Primer>,
-    // /// The pair of PSSMs for matching this region.
-    // pub profile: Paired<lightmotif::ScoringMatrix<lightmotif::Dna>>,
-    // /// The set of unique k-mers in this region.
-    // pub unique_kmers: Paired<OrderedSet<Rc<str>>>,
-    /// The set of unique k-mer pairs in this region.
-    pub unique_pairs: OrderedSet<Paired<usize>>,
-    /// The individual reference entries in this region.
-    pub entries: Vec<DatabaseEntry>,
-    /// A dense, aligned matrix storing unique forward and backward k-mers.
-    pub kmers: Paired<DenseMatrix<u8>>,
-    /// A sparse matrix storing the k-mer to reference correspondance.
-    pub matrix: CscMatrix<f32>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Database {
-    /// The size of the k-mers to extract from the reference sequences.
-    pub k: usize,
-    /// The regions this database contains.
-    pub regions: Vec<DatabaseRegion>,
-    /// The identifiers of the individual references in the database.
-    pub names: OrderedSet<Rc<str>>,
-    /// The number of k-mers extracted from each database reference (R vector).
-    pub amplified: Vec<u8>,
 }
