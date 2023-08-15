@@ -232,17 +232,17 @@ impl Builder {
                 .cloned()
                 .collect::<OrderedSet<_>>();
 
-            // Build PSSMs from the kmer block.
-            let _profile = unique.as_ref().map(|x| {
-                x.iter()
-                    .map(AsRef::as_ref)
-                    .map(EncodedSequence::<Dna>::encode)
-                    .map(Result::unwrap)
-                    .collect::<Result<CountMatrix<Dna>, _>>()
-                    .expect("sequences stored in the builder should be unambiguous DNA")
-                    .to_freq(0.1)
-                    .to_scoring(None)
-            });
+            // // Build PSSMs from the kmer block.
+            // let _profile = unique.as_ref().map(|x| {
+            //     x.iter()
+            //         .map(AsRef::as_ref)
+            //         .map(EncodedSequence::<Dna>::encode)
+            //         .map(Result::unwrap)
+            //         .collect::<Result<CountMatrix<Dna>, _>>()
+            //         .expect("sequences stored in the builder should be unambiguous DNA")
+            //         .to_freq(0.1)
+            //         .to_scoring(None)
+            // });
 
             // Build dense storage for the kmers
             let kmer_block = unique.as_ref().map(|kmers| {
@@ -252,15 +252,17 @@ impl Builder {
                         matrix[j][i] = *x;
                     }
                 }
-                matrix
+                matrix.into()
             });
 
             // Build M_hj matrix
             let mut matrix = DokMatrix::new(unique_pairs.len(), names.len());
             for sketch in entries.iter() {
-                let h = unique_pairs[&sketch.kmer_index];
                 let j = sketch.id;
-                matrix.insert(h, j, 1.0 / amplified[j] as f32);
+                if amplified[j] > 0 {
+                    let h = unique_pairs[&sketch.kmer_index];
+                    matrix.insert(h, j, 1.0 / amplified[j] as f32);
+                }
             }
 
             // Record region

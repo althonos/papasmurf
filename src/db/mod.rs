@@ -1,4 +1,5 @@
 mod builder;
+mod kmers;
 
 use serde::Deserialize;
 use serde::Serialize;
@@ -11,6 +12,7 @@ use crate::utils::Paired;
 use crate::utils::Rc;
 
 pub use self::builder::Builder;
+pub use self::kmers::Kmers;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Entry {
@@ -32,7 +34,7 @@ pub struct Region {
     /// The individual reference entries in this region.
     pub entries: Vec<Entry>,
     /// A dense, aligned matrix storing unique forward and backward k-mers.
-    pub kmers: Paired<DenseMatrix<u8>>,
+    pub kmers: Paired<Kmers>,
     /// A sparse matrix storing the k-mer to reference correspondance.
     pub matrix: CscMatrix<f32>,
 }
@@ -53,8 +55,8 @@ pub struct Database {
 mod ser {
 
     use super::*;
-    use serde::ser::Serializer;
     use serde::ser::SerializeStruct;
+    use serde::ser::Serializer;
     use serde::Serialize;
 
     impl Serialize for Region {
