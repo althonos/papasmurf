@@ -194,32 +194,30 @@ impl<'db> Mapper<'db> {
         // );
 
         let mut mismatch = self.db.regions[r]
-            .kmers
+            .unique_kmers
             .as_ref()
             .map(|block| vec![0u8; block.columns()]);
         simd_mismatches(
             kmer.forward.as_bytes(),
-            &self.db.regions[r].kmers.forward,
+            &self.db.regions[r].unique_kmers.forward,
             &mut mismatch.forward,
         );
         simd_mismatches(
             kmer.backward.as_bytes(),
-            &self.db.regions[r].kmers.backward,
+            &self.db.regions[r].unique_kmers.backward,
             &mut mismatch.backward,
         );
 
         let mut mapped = false;
         for entry in self.db.regions[r].entries.iter() {
-            let mm = Paired::new(
-                mismatch.forward[entry.kmer_index.forward],
-                mismatch.backward[entry.kmer_index.backward],
-            );
+            let pair = &self.db.regions[r].unique_pairs[entry.h];
+            let mm = Paired::new(mismatch.forward[pair.forward], mismatch.backward[pair.backward]);
             const PE: f32 = 0.005;
             let ne = (mm.forward + mm.backward) as f32;
             let l = kmer.forward.len() + kmer.backward.len();
             let e = (PE / 3.0).powf(ne) * (1.0 - PE).powf(l as f32 - ne);
             if e > 0.0 && ne <= 2.0 {
-                self.expected[r].insert(i, self.db.regions[r].unique_pairs[&entry.kmer_index], e);
+                self.expected[r].insert(i, entry.h, e);
                 mapped = true;
             }
         }

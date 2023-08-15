@@ -39,8 +39,6 @@ pub struct Builder {
     sketches: Vec<Vec<Sketch>>,
     /// A string interner, to avoid re-allocating identitical k-mers.
     interner: Interner<str>,
-    /// The number of sequences that have been added to the database.
-    n: usize,
 }
 
 impl Builder {
@@ -57,7 +55,6 @@ impl Builder {
             interner: Default::default(),
             k: 100,
             primer_mismatches: 2,
-            n: 0,
         }
     }
 
@@ -178,10 +175,6 @@ impl Builder {
             });
         }
 
-        if amplified > 0 {
-            self.n += 1;
-        }
-
         amplified
     }
 
@@ -212,25 +205,36 @@ impl Builder {
                 .collect::<Paired<HashSet<_>>>()
                 .map(OrderedSet::from);
 
+            // Extract unique kmer pairs
+            let unique_pairs: OrderedSet<Paired<usize>> = sketches
+                .iter()
+                .map(|sketch| &sketch.kmer)
+                .map(|kmer| Paired::new(
+                    unique.forward[&kmer.forward],
+                    unique.backward[&kmer.backward]
+                ))
+                .collect::<HashSet<Paired<_>>>()
+                .into();
+
             // Encode reference kmers with indices.
             let entries = sketches
                 .iter()
                 .map(|sketch| Entry {
-                    id: names[&sketch.id],
                     // primer: kmer.primer.clone(),
-                    kmer_index: Paired::new(
+                    j: names[&sketch.id],
+                    h: unique_pairs[&Paired::new(
                         unique.forward[&sketch.kmer.forward],
                         unique.backward[&sketch.kmer.backward],
-                    ),
+                    )],
                 })
                 .collect::<Vec<_>>();
 
-            // Extract unique kmer pairs.
-            let unique_pairs = entries
-                .iter()
-                .map(|sketch| &sketch.kmer_index)
-                .cloned()
-                .collect::<OrderedSet<_>>();
+            // // Extract unique kmer pairs.
+            // let unique_pairs = entries
+            //     .iter()
+            //     .map(|sketch| &sketch.kmer_index)
+            //     .cloned()
+            //     .collect::<OrderedSet<_>>();
 
             // // Build PSSMs from the kmer block.
             // let _profile = unique.as_ref().map(|x| {
@@ -245,7 +249,7 @@ impl Builder {
             // });
 
             // Build dense storage for the kmers
-            let kmer_block = unique.as_ref().map(|kmers| {
+            let unique_kmers = unique.as_ref().map(|kmers| {
                 let mut matrix = DenseMatrix::<u8>::new(self.k, kmers.len());
                 for (i, kmer) in kmers.iter().enumerate() {
                     for (j, x) in kmer.as_bytes().iter().enumerate() {
@@ -258,10 +262,8 @@ impl Builder {
             // Build M_hj matrix
             let mut matrix = DokMatrix::new(unique_pairs.len(), names.len());
             for sketch in entries.iter() {
-                let j = sketch.id;
-                if amplified[j] > 0 {
-                    let h = unique_pairs[&sketch.kmer_index];
-                    matrix.insert(h, j, 1.0 / amplified[j] as f32);
+                if amplified[sketch.j] > 0 {
+                    matrix.insert(sketch.h, sketch.j, 1.0 / amplified[sketch.j] as f32);
                 }
             }
 
@@ -272,7 +274,7 @@ impl Builder {
                 entries,
                 unique_pairs,
                 matrix: matrix.to_csc(),
-                kmers: kmer_block,
+                unique_kmers,
             })
         }
 
