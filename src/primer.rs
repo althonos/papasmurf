@@ -6,13 +6,6 @@ use lightmotif::abc::Dna;
 use lightmotif::dense::DenseMatrix;
 use lightmotif::pwm::ScoringMatrix;
 
-use serde::de::Deserializer;
-use serde::de::Error as DeError;
-use serde::de::Visitor;
-use serde::ser::Serializer;
-use serde::Deserialize;
-use serde::Serialize;
-
 use crate::seq::mismatches;
 use crate::seq::reverse_complement;
 use crate::seq::DesambiguationIterator;
@@ -92,39 +85,54 @@ impl Primer {
 
 // --- Serde -------------------------------------------------------------------
 
-impl Serialize for Primer {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        serializer.serialize_str(self.template.as_str())
+#[cfg(feature = "serde")]
+mod ser {
+
+    use super::*;
+    use serde::ser::Serializer;
+    use serde::Serialize;
+
+    impl Serialize for Primer {
+        fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+        where
+            S: Serializer,
+        {
+            serializer.serialize_str(self.template.as_str())
+        }
     }
 }
 
-struct PrimerVisitor;
+#[cfg(feature = "serde")]
+mod de {
 
-impl<'de> Visitor<'de> for PrimerVisitor {
-    type Value = Primer;
+    use super::*;
+    use serde::de::Deserializer;
+    use serde::de::Error as DeError;
+    use serde::de::Visitor;
+    use serde::ser::Serializer;
+    use serde::Deserialize;
+    use serde::Serialize;
 
-    fn expecting(&self, formatter: &mut Formatter) -> FmtResult {
-        write!(formatter, "a string")
+    struct PrimerVisitor;
+
+    impl<'de> Visitor<'de> for PrimerVisitor {
+        type Value = Primer;
+
+        fn expecting(&self, formatter: &mut Formatter) -> FmtResult {
+            write!(formatter, "a string")
+        }
+
+        fn visit_str<E: DeError>(self, s: &str) -> Result<Self::Value, E> {
+            Ok(Primer::new(s))
+        }
     }
 
-    fn visit_str<E: DeError>(self, s: &str) -> Result<Self::Value, E> {
-        Ok(Primer::new(s))
-        // if s.len() >= self.min {
-        //     Ok(s.to_owned())
-        // } else {
-        //     Err(de::Error::invalid_value(Unexpected::Str(s), &self))
-        // }
-    }
-}
-
-impl<'de> Deserialize<'de> for Primer {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        deserializer.deserialize_str(PrimerVisitor)
+    impl<'de> Deserialize<'de> for Primer {
+        fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+        where
+            D: Deserializer<'de>,
+        {
+            deserializer.deserialize_str(PrimerVisitor)
+        }
     }
 }

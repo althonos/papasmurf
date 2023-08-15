@@ -5,7 +5,7 @@ use serde::Deserialize;
 use serde::Serialize;
 
 /// A pair of values for paired-end reads.
-#[derive(Debug, Default, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
+#[derive(Debug, Default, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct Paired<T> {
     pub forward: T,
     pub backward: T,
@@ -42,6 +42,12 @@ impl<T> From<(T, T)> for Paired<T> {
     }
 }
 
+impl<T> From<Paired<T>> for (T, T) {
+    fn from(pair: Paired<T>) -> Self {
+        (pair.forward, pair.backward)
+    }
+}
+
 impl<T> FromIterator<(T, T)> for Paired<HashSet<T>>
 where
     T: PartialEq + Eq + Hash,
@@ -62,5 +68,90 @@ where
 {
     fn from_iter<I: IntoIterator<Item = Paired<T>>>(it: I) -> Self {
         Self::from_iter(it.into_iter().map(|p| (p.forward, p.backward)))
+    }
+}
+
+#[cfg(feature = "serde")]
+mod ser {
+
+    use super::*;
+    use serde::ser::SerializeSeq;
+    use serde::ser::SerializeTuple;
+    use serde::ser::Serializer;
+    use serde::Serialize;
+
+    impl<T: Serialize> Serialize for Paired<T> {
+        fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+        where
+            S: Serializer,
+        {
+            let mut tup = serializer.serialize_tuple(2)?;
+            tup.serialize_element(&self.forward)?;
+            tup.serialize_element(&self.backward)?;
+            tup.end()
+        }
+    }
+}
+
+#[cfg(feature = "serde")]
+mod de {
+
+    use super::*;
+
+    use std::fmt::Formatter;
+    use std::fmt::Result as FmtResult;
+
+    use serde::de::Deserializer;
+    use serde::de::Error;
+    use serde::de::SeqAccess;
+    use serde::de::Visitor;
+    use serde::Deserialize;
+
+    struct PairedVisitor<T> {
+        _marker: std::marker::PhantomData<T>,
+    }
+
+    impl<T> Default for PairedVisitor<T> {
+        fn default() -> Self {
+            Self {
+                _marker: std::marker::PhantomData,
+            }
+        }
+    }
+
+    impl<'de, T> Visitor<'de> for PairedVisitor<T>
+    where
+        T: Deserialize<'de>,
+    {
+        type Value = Paired<T>;
+
+        fn expecting(&self, formatter: &mut Formatter) -> FmtResult {
+            write!(formatter, "a tuple of size 2")
+        }
+
+        fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
+        where
+            A: SeqAccess<'de>,
+        {
+            let mut forward = seq
+                .next_element()?
+                .ok_or_else(|| Error::invalid_length(0, &"a tuple of size 2"))?;
+            let mut backward = seq
+                .next_element()?
+                .ok_or_else(|| Error::invalid_length(1, &"a tuple of size 2"))?;
+            Ok(Paired::new(forward, backward))
+        }
+    }
+
+    impl<'de, T> Deserialize<'de> for Paired<T>
+    where
+        T: Deserialize<'de>,
+    {
+        fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+        where
+            D: Deserializer<'de>,
+        {
+            Ok(deserializer.deserialize_seq(PairedVisitor::default())?)
+        }
     }
 }
