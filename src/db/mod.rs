@@ -1,4 +1,5 @@
 mod builder;
+mod kmertrie;
 mod kmers;
 
 use serde::Deserialize;
@@ -14,6 +15,7 @@ use crate::utils::Rc;
 
 pub use self::builder::Builder;
 pub use self::kmers::Kmers;
+pub use self::kmertrie::KmerTrie;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Region {
