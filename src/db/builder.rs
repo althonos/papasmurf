@@ -17,7 +17,7 @@ use crate::utils::Paired;
 use crate::utils::Rc;
 
 use super::Database;
-use super::Region;
+use super::UnindexedRegion;
 
 #[derive(Debug, Clone)]
 struct Sketch {
@@ -231,12 +231,15 @@ impl Builder {
             }
 
             // Record region
-            regions.push(Region {
-                primer: primer.clone(),
-                unique_pairs,
-                matrix: matrix.to_csc(),
-                unique_kmers: unique,
-            })
+            regions.push(
+                UnindexedRegion {
+                    primer: primer.clone(),
+                    unique_pairs,
+                    matrix: matrix.to_csc(),
+                    unique_kmers: unique,
+                }
+                .into(),
+            )
         }
 
         Database {

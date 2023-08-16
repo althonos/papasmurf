@@ -42,7 +42,6 @@ use lightmotif::pli::Maximum;
 use lightmotif::pli::Score;
 use lightmotif::pli::Threshold;
 
-
 fn main() {
     let path = std::path::PathBuf::from("/tmp/db.json");
 
@@ -183,14 +182,14 @@ fn main() {
     // const R2: &str = "Example_L001_R2_001.fastq";
     // const R1: &str = "samples/PO49S4/PO49S4_L001_R1_001.fastq";
     // const R2: &str = "samples/PO49S4/PO49S4_L001_R2_001.fastq";
-    // const R1: &str = "samples/MCS7/MCS7_L001_R1_001.fastq";
-    // const R2: &str = "samples/MCS7/MCS7_L001_R2_001.fastq";
+    const R1: &str = "samples/MCS7/MCS7_L001_R1_001.fastq";
+    const R2: &str = "samples/MCS7/MCS7_L001_R2_001.fastq";
     // const R1: &str = "samples/GFS6/GFS6_L001_R1_001.fastq";
     // const R2: &str = "samples/GFS6/GFS6_L001_R2_001.fastq";
     // const R1: &str = "raw/Q5RES023A1_20230327091114__MC_S7_R1_001.fastq";
     // const R2: &str = "raw/Q5RES023A1_20230327091114__MC_S7_R2_001.fastq";
-    const R1: &str = "samples/SPFS5/SPFS5_L001_R1_001.fastq";
-    const R2: &str = "samples/SPFS5/SPFS5_L001_R2_001.fastq";
+    // const R1: &str = "samples/SPFS5/SPFS5_L001_R1_001.fastq";
+    // const R2: &str = "samples/SPFS5/SPFS5_L001_R2_001.fastq";
 
     println!("Creating mapper");
     let mut mapper = Mapper::new(&db);
@@ -232,7 +231,6 @@ fn main() {
 
     let result = mapper.finish();
 
-
     let reader = std::fs::File::open("gg_13_5_taxonomy.txt.gz")
         .map(flate2::read::GzDecoder::new)
         .map(std::io::BufReader::new)
@@ -252,9 +250,16 @@ fn main() {
     for j in 0..result.x.len() {
         let name = &db.names[j];
         if result.x[j] > 0.0 {
-            writeln!(output, "{}\t{}\t{}", name, &taxonomy[&name.clone()], result.x[j]).unwrap();
+            writeln!(
+                output,
+                "{}\t{}\t{}",
+                name,
+                &taxonomy[&name.clone()],
+                result.x[j]
+            )
+            .unwrap();
         }
-        if result.x[j] > 0.01 {
+        if result.x[j] > 0.005 {
             println!("[{}] {}: {:?}", name, &taxonomy[&name.clone()], result.x[j]);
         }
     }

@@ -1,6 +1,6 @@
 mod builder;
-mod kmertrie;
 mod kmers;
+mod kmertrie;
 
 use serde::Deserialize;
 use serde::Serialize;
@@ -18,6 +18,56 @@ pub use self::kmers::Kmers;
 pub use self::kmertrie::KmerTrie;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+struct UnindexedRegion {
+    /// The pair of primers defining this region in the database.
+    pub primer: Paired<Primer>,
+    /// The set of unique k-mer pairs in this region.
+    pub unique_pairs: OrderedSet<Paired<usize>>,
+    /// The set of forward and backward k-mers in this region.
+    pub unique_kmers: Paired<OrderedSet<Rc<str>>>,
+    /// A sparse matrix storing the k-mer pair for each database reference.
+    pub matrix: CscMatrix<f32>,
+}
+
+impl From<UnindexedRegion> for Region {
+    fn from(region: UnindexedRegion) -> Self {
+        let k = region
+            .unique_kmers
+            .forward
+            .iter()
+            .next()
+            .map(|kmer| kmer.len())
+            .unwrap_or_default();
+        let mut trie = region.unique_kmers.as_ref().map(|kmers| {
+            let mut trie = KmerTrie::new(k);
+            for kmer in kmers.iter() {
+                trie.insert(kmer);
+            }
+            trie
+        });
+        Self {
+            primer: region.primer,
+            unique_pairs: region.unique_pairs,
+            unique_kmers: region.unique_kmers,
+            matrix: region.matrix,
+            trie,
+        }
+    }
+}
+
+impl From<Region> for UnindexedRegion {
+    fn from(region: Region) -> Self {
+        Self {
+            primer: region.primer,
+            unique_pairs: region.unique_pairs,
+            unique_kmers: region.unique_kmers,
+            matrix: region.matrix,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(from = "UnindexedRegion", into = "UnindexedRegion")]
 pub struct Region {
     /// The pair of primers defining this region in the database.
     pub primer: Paired<Primer>,
@@ -25,6 +75,8 @@ pub struct Region {
     pub unique_pairs: OrderedSet<Paired<usize>>,
     /// The set of forward and backward k-mers in this region.
     pub unique_kmers: Paired<OrderedSet<Rc<str>>>,
+    /// A trie storing the unique kmers for the forward and backward region.
+    pub trie: Paired<KmerTrie>,
     /// A sparse matrix storing the k-mer pair for each database reference.
     pub matrix: CscMatrix<f32>,
 }

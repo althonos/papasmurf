@@ -1,5 +1,3 @@
-
-
 #[derive(Default, Debug, Clone)]
 struct TrieNode {
     a: Option<Box<TrieNode>>,
@@ -26,7 +24,7 @@ impl KmerTrie {
 
     pub fn insert(&mut self, word: &str) {
         assert_eq!(word.len(), self.k);
-        
+
         let mut current_node = &mut self.root;
         for c in word.chars() {
             current_node = match c {
@@ -53,7 +51,7 @@ impl KmerTrie {
 
     pub fn contains(&self, word: &str) -> bool {
         assert_eq!(word.len(), self.k);
-        
+
         let mut current_node = &self.root;
         for c in word.chars() {
             let option = match c {
@@ -87,9 +85,9 @@ impl KmerTrie {
         let mut results = Vec::new();
         let mut bytes = word.as_bytes();
         let mut stack = Vec::new();
-        stack.push(State{
-            node: &self.root, 
-            mismatches: 0, 
+        stack.push(State {
+            node: &self.root,
+            mismatches: 0,
             position: 0,
             prefix: String::new(),
         });

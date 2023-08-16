@@ -2,9 +2,9 @@ use std::collections::HashMap;
 
 use super::db::Database;
 use super::db::KmerTrie;
+use super::matrix::CooMatrix;
 use super::matrix::DenseMatrix;
 use super::matrix::DokMatrix;
-use super::matrix::CooMatrix;
 use super::matrix::MatrixDimensions;
 use super::matrix::NonZeroElements;
 use super::primer::Primer;
@@ -77,7 +77,6 @@ fn simd_mismatches(query: &[u8], db: &DenseMatrix<u8>, out: &mut [u8]) {
 #[derive(Debug, Clone)]
 pub struct Mapper<'db> {
     pub db: &'db Database,
-    pub tries: Vec<Paired<KmerTrie>>,    
     pub expected: Vec<DokMatrix<f32>>,
     primer_mismatches: usize,
     kmer_mismatches: usize,
@@ -92,19 +91,9 @@ impl<'db> Mapper<'db> {
             .iter()
             .map(|region| DokMatrix::new(0, region.unique_pairs.len()))
             .collect();
-        let tries = db.regions.iter()
-            .map(|region| region.unique_kmers.as_ref().map(|kmers| {
-                let mut trie = KmerTrie::new(db.k);
-                for kmer in kmers.iter() {
-                    trie.insert(kmer);
-                }
-                trie
-            }))
-            .collect();
         Self {
             expected,
             db,
-            tries,
             primer_mismatches: 2,
             kmer_mismatches: 2,
             error_probability: 0.005,
@@ -182,11 +171,19 @@ impl<'db> Mapper<'db> {
 
         // Compute mismatches between the read kmer and all the database kmers
         let mut mismatch = Paired::<HashMap<usize, u8>>::default();
-        for (x, mm) in self.tries[r].forward.fuzzy_search(kmer.forward, self.kmer_mismatches) {
+        for (x, mm) in region
+            .trie
+            .forward
+            .fuzzy_search(kmer.forward, self.kmer_mismatches)
+        {
             let h = region.unique_kmers.forward[x.as_str()];
             mismatch.forward.insert(h, mm as u8);
         }
-        for (x, mm) in self.tries[r].backward.fuzzy_search(kmer.backward, self.kmer_mismatches) {
+        for (x, mm) in region
+            .trie
+            .backward
+            .fuzzy_search(kmer.backward, self.kmer_mismatches)
+        {
             let h = region.unique_kmers.backward[x.as_str()];
             mismatch.backward.insert(h, mm as u8);
         }
@@ -253,7 +250,7 @@ impl<'db> Mapper<'db> {
                 xj[j] /= tot;
             }
         }
-        
+
         MapperResult {
             q: q_matrix,
             pi,
