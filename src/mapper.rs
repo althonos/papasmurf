@@ -4,6 +4,7 @@ use super::db::Database;
 use super::db::KmerTrie;
 use super::matrix::DenseMatrix;
 use super::matrix::DokMatrix;
+use super::matrix::CooMatrix;
 use super::matrix::MatrixDimensions;
 use super::matrix::NonZeroElements;
 use super::primer::Primer;
@@ -107,7 +108,7 @@ impl<'db> Mapper<'db> {
             primer_mismatches: 2,
             kmer_mismatches: 2,
             error_probability: 0.005,
-            primer_region: 30,
+            primer_region: 50,
         }
     }
 
@@ -169,53 +170,100 @@ impl<'db> Mapper<'db> {
             &read.forward[pos.forward + region.primer.forward.len()..],
             &read.backward[pos.backward + region.primer.backward.len()..],
         );
-        if kmer.forward.len() > self.db.k {
-            kmer.forward = &kmer.forward[..self.db.k];
-        }
-        if kmer.backward.len() > self.db.k {
-            kmer.backward = &kmer.backward[..self.db.k];
+        // if kmer.forward.len() > self.db.k {
+        //     kmer.forward = &kmer.forward[..self.db.k];
+        // }
+        // if kmer.backward.len() > self.db.k {
+        //     kmer.backward = &kmer.backward[..self.db.k];
+        // }
+        if kmer.forward.len() < self.db.k || kmer.backward.len() < self.db.k {
+            return false;
         }
 
-        // Find the k-mers with few mismatches
-        // let mm_bwd = self.tries[r].backward.fuzzy_search(kmer.backward, self.kmer_mismatches);
-
-        // // Compute mismatches between the read kmer and all the database kmers
+        // Compute mismatches between the read kmer and all the database kmers
         let mut mismatch = Paired::<HashMap<usize, u8>>::default();
         for (x, mm) in self.tries[r].forward.fuzzy_search(kmer.forward, self.kmer_mismatches) {
-            let h = region.unique_kmers.forward[&crate::utils::Rc::from(x)];
+            let h = region.unique_kmers.forward[x.as_str()];
             mismatch.forward.insert(h, mm as u8);
         }
         for (x, mm) in self.tries[r].backward.fuzzy_search(kmer.backward, self.kmer_mismatches) {
-            let h = region.unique_kmers.backward[&crate::utils::Rc::from(x)];
+            let h = region.unique_kmers.backward[x.as_str()];
             mismatch.backward.insert(h, mm as u8);
         }
-
-        // simd_mismatches(
-        //     kmer.forward.as_bytes(),
-        //     &region.unique_kmers.forward,
-        //     &mut mismatch.forward,
-        // );
-        // simd_mismatches(
-        //     kmer.backward.as_bytes(),
-        //     &region.unique_kmers.backward,
-        //     &mut mismatch.backward,
-        // );
 
         // Record the read if it matches any database kmer
         let mut mapped = false;
         for (h, pair) in region.unique_pairs.iter().enumerate() {
-            if let (Some(mm_fwd), Some(mm_bwd)) = (mismatch.forward.get(&pair.forward), mismatch.backward.get(&pair.backward)) {
-                let ne = (mm_fwd + mm_bwd) as usize;
-                let l = kmer.forward.len() + kmer.backward.len();
-                let e = (self.error_probability / 3.0).powf(ne as f32)
-                    * (1.0 - self.error_probability).powf((l - ne) as f32);
-                if e > 0.0 && ne <= self.kmer_mismatches {
-                    self.expected[r].insert(i, h, e);
-                    mapped = true;
+            if let Some(mm_fwd) = mismatch.forward.get(&pair.forward) {
+                if let Some(mm_bwd) = mismatch.backward.get(&pair.backward) {
+                    let ne = (mm_fwd + mm_bwd) as usize;
+                    let l = kmer.forward.len() + kmer.backward.len();
+                    let e = (self.error_probability / 3.0).powf(ne as f32)
+                        * (1.0 - self.error_probability).powf((l - ne) as f32);
+                    if e > 0.0 && ne <= self.kmer_mismatches {
+                        self.expected[r].insert(i, h, e);
+                        mapped = true;
+                    }
                 }
             }
         }
 
         mapped
     }
+
+    pub fn finish(&self) -> MapperResult {
+        // Compute the Q_i,j matrix
+        let mut q_matrix = CooMatrix::<f32>::new(self.expected[0].rows(), self.db.names.len());
+        for (r, region) in self.db.regions.iter().enumerate() {
+            let e_csr = self.expected[r].to_csr();
+            q_matrix = q_matrix + e_csr.dot(&region.matrix);
+        }
+
+        // Compute the pi_j vector
+        let mut pi = vec![1.0; q_matrix.columns()];
+        let mut up = vec![0.0; q_matrix.columns()];
+        let mut dens = vec![0.0; q_matrix.rows()];
+        for it in 0..10 {
+            // println!("iteration {}", it);
+            dens.fill(0.0);
+            for (i, j, x) in q_matrix.iter() {
+                dens[i] += x * pi[j];
+            }
+            up.fill(0.0);
+            for (i, j, x) in q_matrix.iter() {
+                if dens[i] > 0.0 {
+                    up[j] += *x / dens[i]
+                }
+            }
+            for j in 0..q_matrix.columns() {
+                pi[j] *= up[j] / q_matrix.rows() as f32;
+            }
+        }
+
+        println!("Computing X_j vector");
+        let mut xj = vec![0.0; q_matrix.columns()];
+        for j in 0..q_matrix.columns() {
+            if self.db.amplified[j] > 0 {
+                xj[j] = pi[j] / self.db.amplified[j] as f32;
+            }
+        }
+        let mut tot = xj.iter().sum::<f32>();
+        if tot > 0.0 {
+            for j in 0..q_matrix.columns() {
+                xj[j] /= tot;
+            }
+        }
+        
+        MapperResult {
+            q: q_matrix,
+            pi,
+            x: xj,
+        }
+    }
+}
+
+pub struct MapperResult {
+    pub q: CooMatrix<f32>,
+    pub pi: Vec<f32>,
+    pub x: Vec<f32>,
 }

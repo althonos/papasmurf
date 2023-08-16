@@ -183,14 +183,14 @@ fn main() {
     // const R2: &str = "Example_L001_R2_001.fastq";
     // const R1: &str = "samples/PO49S4/PO49S4_L001_R1_001.fastq";
     // const R2: &str = "samples/PO49S4/PO49S4_L001_R2_001.fastq";
-    const R1: &str = "samples/MCS7/MCS7_L001_R1_001.fastq";
-    const R2: &str = "samples/MCS7/MCS7_L001_R2_001.fastq";
+    // const R1: &str = "samples/MCS7/MCS7_L001_R1_001.fastq";
+    // const R2: &str = "samples/MCS7/MCS7_L001_R2_001.fastq";
     // const R1: &str = "samples/GFS6/GFS6_L001_R1_001.fastq";
     // const R2: &str = "samples/GFS6/GFS6_L001_R2_001.fastq";
     // const R1: &str = "raw/Q5RES023A1_20230327091114__MC_S7_R1_001.fastq";
     // const R2: &str = "raw/Q5RES023A1_20230327091114__MC_S7_R2_001.fastq";
-    // const R1: &str = "samples/SPFS5/SPFS5_L001_R1_001.fastq";
-    // const R2: &str = "samples/SPFS5/SPFS5_L001_R2_001.fastq";
+    const R1: &str = "samples/SPFS5/SPFS5_L001_R1_001.fastq";
+    const R2: &str = "samples/SPFS5/SPFS5_L001_R2_001.fastq";
 
     println!("Creating mapper");
     let mut mapper = Mapper::new(&db);
@@ -223,70 +223,15 @@ fn main() {
         // }
     }
     println!("Processed {} reads", mapper.expected[0].rows());
+    println!("Mapped {} reads", mapped_reads);
     pb.finish_and_clear();
 
     for r in 0..db.regions.len() {
         println!("[r={}] extracted: {}", r, mapper.expected[r].nnz());
     }
 
-    // --- BUILD Q MATRIX ---
-    println!("Computing Q_i,j matrix");
-    let mut q_matrix = CooMatrix::<f32>::new(mapper.expected[0].rows(), db.names.len());
-    for (r, region) in db.regions.iter().enumerate() {
-        let e_csr = mapper.expected[r].to_csr();
-        q_matrix = q_matrix + e_csr.dot(&region.matrix);
-    }
-    // println!("{:?}", q_matrix);
+    let result = mapper.finish();
 
-    // --- ITERATE
-
-    println!("Computing π_j vector");
-
-    let pb = indicatif::ProgressBar::new(size as u64).with_style(
-        indicatif::ProgressStyle::with_template(
-            "[{elapsed_precise}] {bar:40.cyan/blue} {pos}/{total} ({per_sec}) {msg}",
-        )
-        .unwrap(),
-    );
-
-    let mut pi = vec![1.0; q_matrix.columns()];
-    let mut up = vec![0.0; q_matrix.columns()];
-    let mut dens = vec![0.0; q_matrix.rows()];
-
-    for it in pb.wrap_iter(0..10) {
-        // println!("iteration {}", it);
-
-        dens.fill(0.0);
-        for (i, j, x) in q_matrix.iter() {
-            dens[i] += x * pi[j];
-        }
-
-        up.fill(0.0);
-        for (i, j, x) in q_matrix.iter() {
-            if dens[i] > 0.0 {
-                up[j] += *x / dens[i]
-            }
-        }
-
-        for j in 0..q_matrix.columns() {
-            pi[j] *= up[j] / q_matrix.rows() as f32;
-        }
-    }
-    pb.finish_and_clear();
-
-    println!("Computing X_j vector");
-    let mut xj = vec![0.0; q_matrix.columns()];
-    for j in 0..q_matrix.columns() {
-        if db.amplified[j] > 0 {
-            xj[j] = pi[j] / db.amplified[j] as f32;
-        }
-    }
-    let mut tot = xj.iter().sum::<f32>();
-    if tot > 0.0 {
-        for j in 0..q_matrix.columns() {
-            xj[j] /= tot;
-        }
-    }
 
     let reader = std::fs::File::open("gg_13_5_taxonomy.txt.gz")
         .map(flate2::read::GzDecoder::new)
@@ -304,13 +249,13 @@ fn main() {
     let mut output = std::fs::File::create("/tmp/GFS6_L001.tsv").unwrap();
 
     println!("Result: ({} reads)", mapped_reads);
-    for j in 0..xj.len() {
+    for j in 0..result.x.len() {
         let name = &db.names[j];
-        if xj[j] > 0.0 {
-            writeln!(output, "{}\t{}\t{}", name, &taxonomy[&name.clone()], xj[j]).unwrap();
+        if result.x[j] > 0.0 {
+            writeln!(output, "{}\t{}\t{}", name, &taxonomy[&name.clone()], result.x[j]).unwrap();
         }
-        if xj[j] > 0.005 {
-            println!("[{}] {}: {:?}", name, &taxonomy[&name.clone()], xj[j]);
+        if result.x[j] > 0.01 {
+            println!("[{}] {}: {:?}", name, &taxonomy[&name.clone()], result.x[j]);
         }
     }
 }

@@ -6,6 +6,8 @@ use std::fmt::Result as FmtResult;
 use std::hash::Hash;
 use std::ops::Index;
 
+use super::Rc;
+
 /// An immutable ordered set, mapping unique elements to a fixed index.
 #[derive(Debug, Clone)]
 pub struct OrderedSet<T> {

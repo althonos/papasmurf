@@ -73,7 +73,9 @@ impl KmerTrie {
     }
 
     pub fn fuzzy_search(&self, word: &str, max_mismatches: usize) -> Vec<(String, usize)> {
-        // implement a depth-first search algorithm
+        if word.len() < self.k {
+            panic!("{} < {}", word.len(), self.k);
+        }
 
         struct State<'a> {
             node: &'a TrieNode,
@@ -83,7 +85,6 @@ impl KmerTrie {
         }
 
         let mut results = Vec::new();
-
         let mut bytes = word.as_bytes();
         let mut stack = Vec::new();
         stack.push(State{
@@ -142,28 +143,6 @@ impl KmerTrie {
         }
 
         results
-        // let mut  = &self.root;
-
-        // for c in word.chars() {
-
-        //     let option = match c {
-        //         'A' => &current_node.a,
-        //         'C' => &current_node.c,
-        //         'G' => &current_node.g,
-        //         'T' => &current_node.t,
-        //         _ => unreachable!(),
-        //     };
-
-        //     match option {
-        //         Some(node) => current_node = node,
-        //         None => return false,
-        //     }
-        // }
-
-        // current_node.is_end_of_word
-        
-
-
     }
 }
 
