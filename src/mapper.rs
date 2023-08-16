@@ -94,10 +94,10 @@ impl<'db> Mapper<'db> {
         Self {
             expected,
             db,
-            primer_mismatches: 2,
-            kmer_mismatches: 2,
+            primer_mismatches: 4,
+            kmer_mismatches: 4,
             error_probability: 0.005,
-            primer_region: 50,
+            primer_region: 20,
         }
     }
 
@@ -150,7 +150,7 @@ impl<'db> Mapper<'db> {
         let region = &self.db.regions[r];
 
         // Skip if primers mismatch the reads
-        if primer_mismatches.forward > 2 || primer_mismatches.backward > 2 {
+        if primer_mismatches.forward > self.primer_mismatches || primer_mismatches.backward > self.primer_mismatches {
             return false;
         }
 
@@ -159,13 +159,15 @@ impl<'db> Mapper<'db> {
             &read.forward[pos.forward + region.primer.forward.len()..],
             &read.backward[pos.backward + region.primer.backward.len()..],
         );
-        // if kmer.forward.len() > self.db.k {
-        //     kmer.forward = &kmer.forward[..self.db.k];
-        // }
-        // if kmer.backward.len() > self.db.k {
-        //     kmer.backward = &kmer.backward[..self.db.k];
-        // }
-        if kmer.forward.len() < self.db.k || kmer.backward.len() < self.db.k {
+        
+        if kmer.forward.len() > self.db.k {
+            kmer.forward = &kmer.forward[..self.db.k];
+        } else if kmer.forward.len() < self.db.k {
+            return false;
+        }
+        if kmer.backward.len() > self.db.k {
+            kmer.backward = &kmer.backward[..self.db.k];
+        } else if kmer.backward.len() < self.db.k {
             return false;
         }
 

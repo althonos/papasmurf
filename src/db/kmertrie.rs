@@ -1,4 +1,30 @@
 use std::num::NonZeroU32;
+use std::rc::Rc;
+use std::collections::VecDeque;
+
+#[derive(Debug, Clone)]
+struct Link<T> {
+    data: T,
+    prev: Option<Rc<Link<T>>>,
+}
+
+impl<T> Link<T> {
+    pub fn new(data: T) -> Rc<Self> {
+        Self { 
+            data,
+            prev: None
+        }.into()
+    }
+
+    pub fn link(self: &Rc<Self>, data: T) -> Rc<Self> {
+        Rc::from(Link {
+            data,
+            prev: Some(self.clone()),
+        })
+    }
+}
+
+
 
 #[derive(Default, Debug, Clone)]
 struct TrieNode {
@@ -88,61 +114,73 @@ impl KmerTrie {
             node: u32,
             mismatches: usize,
             position: usize,
-            prefix: String,
+            prefix: Rc<Link<u8>>,
         }
 
         let mut results = Vec::new();
         let mut bytes = word.as_bytes();
-        let mut stack = Vec::new();
-        stack.push(State {
+        let mut stack = VecDeque::new();
+        stack.push_back(State {
             node: 0,
             mismatches: 0,
             position: 0,
-            prefix: String::new(),
+            prefix: Link::new(0),
         });
 
-        while let Some(state) = stack.pop() {
+        while let Some(state) = stack.pop_back() {
             if state.position == self.k {
-                results.push((state.prefix, state.mismatches));
+
+
+                let mut s = Vec::new();
+                let mut n = &state.prefix;
+
+                while let Some(x) = &n.prev {
+                    s.push(n.data);
+                    n = x;
+                }
+
+                s.reverse();
+                results.push((String::from_utf8(s).unwrap(), state.mismatches));
+                // unimplemented!()
             } else {
                 let c = bytes[state.position];
                 if let Some(node) = &self.storage[state.node as usize].a {
                     if c == b'A' || state.mismatches < max_mismatches {
-                        stack.push(State {
+                        stack.push_back(State {
                             node: node.get(),
-                            mismatches: state.mismatches + (c != b'A') as usize,
+                            mismatches: state.mismatches + (c != b'A' && c != b'N') as usize,
                             position: state.position + 1,
-                            prefix: format!("{}A", &state.prefix),
+                            prefix: state.prefix.link(b'A'),
                         })
                     }
                 }
                 if let Some(node) = &self.storage[state.node as usize].c {
                     if c == b'C' || state.mismatches < max_mismatches {
-                        stack.push(State {
+                        stack.push_back(State {
                             node: node.get(),
-                            mismatches: state.mismatches + (c != b'C') as usize,
+                            mismatches: state.mismatches + (c != b'C' && c != b'N') as usize,
                             position: state.position + 1,
-                            prefix: format!("{}C", &state.prefix),
+                            prefix: state.prefix.link(b'C'),
                         })
                     }
                 }
                 if let Some(node) = &self.storage[state.node as usize].g {
                     if c == b'G' || state.mismatches < max_mismatches {
-                        stack.push(State {
+                        stack.push_back(State {
                             node: node.get(),
-                            mismatches: state.mismatches + (c != b'G') as usize,
+                            mismatches: state.mismatches + (c != b'G' && c != b'N') as usize,
                             position: state.position + 1,
-                            prefix: format!("{}G", &state.prefix),
+                            prefix: state.prefix.link(b'G'),
                         })
                     }
                 }
                 if let Some(node) = &self.storage[state.node as usize].t {
                     if c == b'T' || state.mismatches < max_mismatches {
-                        stack.push(State {
+                        stack.push_back(State {
                             node: node.get(),
-                            mismatches: state.mismatches + (c != b'T') as usize,
+                            mismatches: state.mismatches + (c != b'T' && c != b'N') as usize,
                             position: state.position + 1,
-                            prefix: format!("{}T", &state.prefix),
+                            prefix: state.prefix.link(b'T'),
                         })
                     }
                 }
