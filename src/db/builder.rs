@@ -218,15 +218,15 @@ impl Builder {
                 .into();
 
             // Build dense storage for the kmers
-            let unique_kmers = unique.as_ref().map(|kmers| {
-                let mut matrix = DenseMatrix::<u8>::new(self.k, kmers.len());
-                for (i, kmer) in kmers.iter().enumerate() {
-                    for (j, x) in kmer.as_bytes().iter().enumerate() {
-                        matrix[j][i] = *x;
-                    }
-                }
-                matrix.into()
-            });
+            // let unique_kmers = unique.as_ref().map(|kmers| {
+            //     let mut matrix = DenseMatrix::<u8>::new(self.k, kmers.len());
+            //     for (i, kmer) in kmers.iter().enumerate() {
+            //         for (j, x) in kmer.as_bytes().iter().enumerate() {
+            //             matrix[j][i] = *x;
+            //         }
+            //     }
+            //     matrix.into()
+            // });
 
             // Build M_hj matrix
             let mut matrix = DokMatrix::new(unique_pairs.len(), names.len());
@@ -248,7 +248,7 @@ impl Builder {
                 // entries,
                 unique_pairs,
                 matrix: matrix.to_csc(),
-                unique_kmers,
+                unique_kmers: unique,
             })
         }
 

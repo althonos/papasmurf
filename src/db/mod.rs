@@ -23,8 +23,8 @@ pub struct Region {
     pub primer: Paired<Primer>,
     /// The set of unique k-mer pairs in this region.
     pub unique_pairs: OrderedSet<Paired<usize>>,
-    /// A dense, aligned matrix storing unique forward and backward k-mers.
-    pub unique_kmers: Paired<Kmers>,
+    /// The set of forward and backward k-mers in this region.
+    pub unique_kmers: Paired<OrderedSet<Rc<str>>>,
     /// A sparse matrix storing the k-mer pair for each database reference.
     pub matrix: CscMatrix<f32>,
 }

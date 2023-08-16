@@ -1,5 +1,7 @@
-use super::db::Database;
+use std::collections::HashMap;
 
+use super::db::Database;
+use super::db::KmerTrie;
 use super::matrix::DenseMatrix;
 use super::matrix::DokMatrix;
 use super::matrix::MatrixDimensions;
@@ -74,6 +76,7 @@ fn simd_mismatches(query: &[u8], db: &DenseMatrix<u8>, out: &mut [u8]) {
 #[derive(Debug, Clone)]
 pub struct Mapper<'db> {
     pub db: &'db Database,
+    pub tries: Vec<Paired<KmerTrie>>,    
     pub expected: Vec<DokMatrix<f32>>,
     primer_mismatches: usize,
     kmer_mismatches: usize,
@@ -88,9 +91,19 @@ impl<'db> Mapper<'db> {
             .iter()
             .map(|region| DokMatrix::new(0, region.unique_pairs.len()))
             .collect();
+        let tries = db.regions.iter()
+            .map(|region| region.unique_kmers.as_ref().map(|kmers| {
+                let mut trie = KmerTrie::new(db.k);
+                for kmer in kmers.iter() {
+                    trie.insert(kmer);
+                }
+                trie
+            }))
+            .collect();
         Self {
             expected,
             db,
+            tries,
             primer_mismatches: 2,
             kmer_mismatches: 2,
             error_probability: 0.005,
@@ -163,32 +176,43 @@ impl<'db> Mapper<'db> {
             kmer.backward = &kmer.backward[..self.db.k];
         }
 
-        // Compute mismatches between the read kmer and all the database kmers
-        let mut mismatch = region
-            .unique_kmers
-            .as_ref()
-            .map(|block| vec![0u8; block.columns()]);
-        simd_mismatches(
-            kmer.forward.as_bytes(),
-            &region.unique_kmers.forward,
-            &mut mismatch.forward,
-        );
-        simd_mismatches(
-            kmer.backward.as_bytes(),
-            &region.unique_kmers.backward,
-            &mut mismatch.backward,
-        );
+        // Find the k-mers with few mismatches
+        // let mm_bwd = self.tries[r].backward.fuzzy_search(kmer.backward, self.kmer_mismatches);
+
+        // // Compute mismatches between the read kmer and all the database kmers
+        let mut mismatch = Paired::<HashMap<usize, u8>>::default();
+        for (x, mm) in self.tries[r].forward.fuzzy_search(kmer.forward, self.kmer_mismatches) {
+            let h = region.unique_kmers.forward[&crate::utils::Rc::from(x)];
+            mismatch.forward.insert(h, mm as u8);
+        }
+        for (x, mm) in self.tries[r].backward.fuzzy_search(kmer.backward, self.kmer_mismatches) {
+            let h = region.unique_kmers.backward[&crate::utils::Rc::from(x)];
+            mismatch.backward.insert(h, mm as u8);
+        }
+
+        // simd_mismatches(
+        //     kmer.forward.as_bytes(),
+        //     &region.unique_kmers.forward,
+        //     &mut mismatch.forward,
+        // );
+        // simd_mismatches(
+        //     kmer.backward.as_bytes(),
+        //     &region.unique_kmers.backward,
+        //     &mut mismatch.backward,
+        // );
 
         // Record the read if it matches any database kmer
         let mut mapped = false;
         for (h, pair) in region.unique_pairs.iter().enumerate() {
-            let ne = (mismatch.forward[pair.forward] + mismatch.backward[pair.backward]) as usize;
-            let l = kmer.forward.len() + kmer.backward.len();
-            let e = (self.error_probability / 3.0).powf(ne as f32)
-                * (1.0 - self.error_probability).powf((l - ne) as f32);
-            if e > 0.0 && ne <= self.kmer_mismatches {
-                self.expected[r].insert(i, h, e);
-                mapped = true;
+            if let (Some(mm_fwd), Some(mm_bwd)) = (mismatch.forward.get(&pair.forward), mismatch.backward.get(&pair.backward)) {
+                let ne = (mm_fwd + mm_bwd) as usize;
+                let l = kmer.forward.len() + kmer.backward.len();
+                let e = (self.error_probability / 3.0).powf(ne as f32)
+                    * (1.0 - self.error_probability).powf((l - ne) as f32);
+                if e > 0.0 && ne <= self.kmer_mismatches {
+                    self.expected[r].insert(i, h, e);
+                    mapped = true;
+                }
             }
         }
 

@@ -9,7 +9,7 @@ use crate::matrix::MatrixDimensions;
 /// A generic data structure to store all the kmers of a database region.
 #[derive(Debug, Clone)]
 pub struct Kmers {
-    block: DenseMatrix<u8>,
+    pub block: DenseMatrix<u8>,
 }
 
 impl From<DenseMatrix<u8>> for Kmers {
