@@ -1,5 +1,4 @@
 use super::db::Database;
-
 use super::matrix::CooMatrix;
 use super::matrix::DenseMatrix;
 use super::matrix::DokMatrix;
@@ -122,12 +121,24 @@ impl<'db> Mapper<'db> {
         self
     }
 
-    fn scan_primer(&self, primer: &Primer, sequence: &str) -> (usize, usize) {
-        let offset = self.primer_region.min(sequence.len() - primer.len());
-        let mut min_i = usize::MAX;
+    fn scan_primer(&self, primer: &Primer, sequence: &str) -> (isize, usize) {
+
+        let min_offset = -(primer.len() as isize) + 1;
+        let max_offset = self.primer_region.min(sequence.len() - primer.len()) as isize;
+
+        let mut min_i = isize::MAX;
         let mut min_mm = usize::MAX;
-        for i in 0..offset {
-            let mm = primer.mismatches(&sequence[i..i + primer.len()]);
+
+        for i in min_offset..max_offset {
+            let mm = if i < 0 {
+                let q = &primer.template[(-i) as usize..];
+                let t = &sequence[..(primer.len() as isize + i) as usize];
+                super::seq::mismatches(q, t) + (-i) as usize
+            } else {
+                let q = &primer.template;
+                let t = &sequence[i as usize..(i+primer.len() as isize) as usize];
+                super::seq::mismatches(q, t)
+            };
             if mm == 0 {
                 return (i, mm);
             }
@@ -136,6 +147,7 @@ impl<'db> Mapper<'db> {
                 min_mm = mm;
             }
         }
+
         (min_i, min_mm)
     }
 
@@ -171,16 +183,14 @@ impl<'db> Mapper<'db> {
         let region = &self.db.regions[r];
 
         // Skip if primers mismatch the reads
-        if primer_mismatches.forward > self.primer_mismatches
-            || primer_mismatches.backward > self.primer_mismatches
-        {
+        if primer_mismatches.forward > self.primer_mismatches || primer_mismatches.backward > self.primer_mismatches{
             return false;
         }
 
         // Create the kmer pair
         let mut kmer = Paired::new(
-            &read.forward[pos.forward + region.primer.forward.len()..],
-            &read.backward[pos.backward + region.primer.backward.len()..],
+            &read.forward[(pos.forward + region.primer.forward.len() as isize) as usize..],
+            &read.backward[(pos.backward + region.primer.backward.len() as isize) as usize..],
         );
 
         // Check that the kmer is long enough for the database regions or that
@@ -235,9 +245,9 @@ impl<'db> Mapper<'db> {
             // if let Some(mm_fwd) = mismatch.forward.get(&pair.forward) {
             // if let Some(mm_bwd) = mismatch.backward.get(&pair.backward) {
             // let ne = (mm_fwd + mm_bwd) as usize;
-            let ne = (mismatch.forward[pair.forward] + mismatch.backward[pair.backward]) as usize;
-            let l = kmer.forward.len() + kmer.backward.len();
-            if ne <= self.kmer_mismatches {
+            if mismatch.forward[pair.forward] as usize <= self.kmer_mismatches && mismatch.backward[pair.backward] as usize <= self.kmer_mismatches {
+                let l = kmer.forward.len() + kmer.backward.len();
+                let ne = (mismatch.forward[pair.forward] + mismatch.backward[pair.backward]) as usize;
                 let e = (self.error_probability / 3.0).powf(ne as f32)
                     * (1.0 - self.error_probability).powf((l - ne) as f32);
                 if e > 0.0 {
