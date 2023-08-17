@@ -1,7 +1,6 @@
 use super::db::Database;
 
 use super::matrix::CooMatrix;
-
 use super::matrix::DenseMatrix;
 use super::matrix::DokMatrix;
 use super::matrix::Dot;
@@ -238,11 +237,13 @@ impl<'db> Mapper<'db> {
             // let ne = (mm_fwd + mm_bwd) as usize;
             let ne = (mismatch.forward[pair.forward] + mismatch.backward[pair.backward]) as usize;
             let l = kmer.forward.len() + kmer.backward.len();
-            let e = (self.error_probability / 3.0).powf(ne as f32)
-                * (1.0 - self.error_probability).powf((l - ne) as f32);
-            if e > 0.0 && ne <= self.kmer_mismatches {
-                self.expected[r].insert(i, h, e);
-                mapped = true;
+            if ne <= self.kmer_mismatches {
+                let e = (self.error_probability / 3.0).powf(ne as f32)
+                    * (1.0 - self.error_probability).powf((l - ne) as f32);
+                if e > 0.0 {
+                    self.expected[r].insert(i, h, e);
+                    mapped = true;
+                }
             }
             // }
             // }
