@@ -1,6 +1,7 @@
 use std::cmp::Ordering;
 use std::iter::FusedIterator;
 use std::ops::Add;
+use std::ops::AddAssign;
 use std::ops::Mul;
 
 use serde::Deserialize;
@@ -8,6 +9,7 @@ use serde::Serialize;
 
 use super::coo::CooMatrix;
 use super::csc::CscMatrix;
+use super::Dot;
 use super::MatrixDimensions;
 use super::NonZeroElements;
 
@@ -30,8 +32,153 @@ impl<T> CsrMatrix<T> {
     }
 }
 
-impl<T: Add<Output = T> + Mul<Output = T> + PartialEq + Clone> CsrMatrix<T> {
-    pub fn dot(&self, rhs: &CscMatrix<T>) -> CooMatrix<T> {
+impl<T: Clone> CsrMatrix<T> {
+    pub fn to_coo(&self) -> CooMatrix<T> {
+        let mut coo = CooMatrix::new(self.rows(), self.columns());
+        for (i, j, x) in self.non_zero_elements() {
+            coo.insert(i, j, x.clone());
+        }
+        coo
+    }
+}
+
+impl<T: Add<Output = T> + PartialEq + Clone + Default> Add<&CsrMatrix<T>> for CsrMatrix<T> {
+    type Output = CooMatrix<T>;
+    fn add(self, rhs: &CsrMatrix<T>) -> Self::Output {
+        assert_eq!(self.rows(), rhs.rows());
+        assert_eq!(self.columns(), rhs.columns());
+
+        let mut out = CooMatrix::new(self.rows(), self.columns());
+
+        let mut l = self.non_zero_elements();
+        let mut r = self.non_zero_elements();
+        let mut l_item = l.next();
+        let mut r_item = r.next();
+
+        loop {
+            match (l_item, r_item) {
+                (Some((li, lj, lx)), Some((ri, rj, _))) if (li, lj) < (ri, rj) => {
+                    out.insert(li, lj, lx.clone());
+                    l_item = l.next();
+                }
+                (Some((li, lj, lx)), None) => {
+                    out.insert(li, lj, lx.clone());
+                    l_item = l.next();
+                }
+                (Some((li, lj, _)), Some((ri, rj, rx))) if (li, lj) > (ri, rj) => {
+                    out.insert(ri, rj, rx.clone());
+                    r_item = r.next();
+                }
+                (None, Some((ri, rj, rx))) => {
+                    out.insert(ri, rj, rx.clone());
+                    r_item = r.next();
+                }
+                (Some((_, _, lx)), Some((ri, rj, rx))) => {
+                    let x = lx.clone() + rx.clone();
+                    if x != T::default() {
+                        out.insert(ri, rj, x);
+                    }
+                    l_item = l.next();
+                    r_item = r.next();
+                }
+                (None, None) => break,
+            }
+        }
+
+        out
+    }
+}
+
+impl<T: Add<Output = T> + PartialEq + Clone + Default> Add<CsrMatrix<T>> for CsrMatrix<T> {
+    type Output = CooMatrix<T>;
+    fn add(self, rhs: CsrMatrix<T>) -> Self::Output {
+        self.add(&rhs)
+    }
+}
+
+impl<T: AddAssign + Mul<Output = T> + PartialEq + Clone + Default> Dot<&CsrMatrix<T>>
+    for CsrMatrix<T>
+{
+    type Output = CsrMatrix<T>;
+    fn dot(self, rhs: &CsrMatrix<T>) -> CsrMatrix<T> {
+        assert_eq!(self.columns(), rhs.rows());
+
+        let mut out = CsrMatrix::new(self.rows(), rhs.columns());
+
+        let mut ip = 0;
+        let mut x = vec![T::default(); rhs.columns()];
+        let mut xb = vec![usize::MAX; rhs.columns()];
+
+        for i in 0..self.row_index.len() - 1 {
+            out.row_index[i] = ip;
+
+            let start_row_a = self.row_index[i];
+            let end_row_a = self.row_index[i + 1];
+
+            for jp in start_row_a..end_row_a {
+                let j = self.col_index[jp];
+
+                let start_row_b = rhs.row_index[j];
+                let end_row_b = rhs.row_index[j + 1];
+
+                for kp in start_row_b..end_row_b {
+                    let k = rhs.col_index[kp];
+                    if xb[k] != i {
+                        out.col_index.push(k);
+                        ip += 1;
+                        xb[k] = i;
+                        x[k] = self.data[jp].clone() * rhs.data[kp].clone();
+                    } else {
+                        x[k] += self.data[jp].clone() * rhs.data[kp].clone();
+                    }
+                }
+            }
+
+            for vp in out.row_index[i]..ip {
+                let v = out.col_index[vp];
+                out.data.push(x[v].clone());
+            }
+        }
+
+        let n = out.row_index.len();
+        out.row_index[n - 1] = ip;
+
+        let mut tmp = Vec::new();
+        for p in 0..out.row_index.len() - 1 {
+            let row = out.row_index[p]..out.row_index[p + 1];
+
+            tmp.clear();
+            for i in row {
+                tmp.push((out.col_index[i], out.data[i].clone()));
+            }
+            tmp.sort_unstable_by_key(|(j, _)| *j);
+
+            let mut k = out.row_index[p];
+            for (j, x) in tmp.drain(..) {
+                out.col_index[k] = j;
+                out.data[k] = x;
+                k += 1;
+            }
+        }
+
+        out
+    }
+}
+
+impl<T: AddAssign + Mul<Output = T> + PartialEq + Clone + Default> Dot<CsrMatrix<T>>
+    for CsrMatrix<T>
+{
+    type Output = CsrMatrix<T>;
+    fn dot(self, rhs: CsrMatrix<T>) -> CsrMatrix<T> {
+        self.dot(&rhs)
+    }
+}
+
+impl<T: AddAssign + Mul<Output = T> + PartialEq + Clone + Default> Dot<&CscMatrix<T>>
+    for CsrMatrix<T>
+{
+    type Output = CooMatrix<T>;
+    fn dot(self, rhs: &CscMatrix<T>) -> CooMatrix<T> {
         assert_eq!(self.cols, rhs.rows);
 
         let mut out = CooMatrix::new(self.rows(), rhs.columns());
@@ -52,7 +199,7 @@ impl<T: Add<Output = T> + Mul<Output = T> + PartialEq + Clone> CsrMatrix<T> {
                 let col_rows = &rhs.row_index[rhs.col_index[j]..rhs.col_index[j + 1]];
                 let col_data = &rhs.data[rhs.col_index[j]..rhs.col_index[j + 1]];
 
-                let mut x: Option<T> = None;
+                let mut x = T::default();
                 let mut k1 = 0;
                 let mut k2 = 0;
 
@@ -62,26 +209,36 @@ impl<T: Add<Output = T> + Mul<Output = T> + PartialEq + Clone> CsrMatrix<T> {
                         Ordering::Greater => k2 += 1,
                         Ordering::Equal => {
                             let p = row_data[k1].clone() * col_data[k2].clone();
-                            if let Some(n) = x.as_mut() {
-                                *n = n.clone() + p;
-                            } else {
-                                x = Some(p);
-                            }
+                            x += p;
+                            // if let Some(n) = x.as_mut() {
+                            //     *n = n.clone() + p;
+                            // } else {
+                            //     x = Some(p);
+                            // }
                             k1 += 1;
                             k2 += 1;
                         }
                     }
                 }
 
-                if let Some(res) = x {
+                if x != T::default() {
                     out.i.push(i);
                     out.j.push(j);
-                    out.data.push(res);
+                    out.data.push(x);
                 }
             }
         }
 
         out
+    }
+}
+
+impl<T: AddAssign + Mul<Output = T> + PartialEq + Clone + Default> Dot<CscMatrix<T>>
+    for CsrMatrix<T>
+{
+    type Output = CooMatrix<T>;
+    fn dot(self, rhs: CscMatrix<T>) -> CooMatrix<T> {
+        self.dot(&rhs)
     }
 }
 
@@ -158,6 +315,7 @@ impl<'m, T: 'm> NonZeroElements<'m, T> for CsrMatrix<T> {
 mod test {
 
     use super::super::dok::DokMatrix;
+    use super::super::Dot;
     use super::*;
 
     #[test]
@@ -167,7 +325,23 @@ mod test {
         a.insert(0, 1, 2);
         a.insert(1, 0, 3);
 
-        let c = a.to_csr().dot(&a.to_csc());
+        let c = a.to_csr().dot(a.to_csc());
+        let mut it = c.iter();
+        assert_eq!(it.next(), Some((0, 0, &7)));
+        assert_eq!(it.next(), Some((0, 1, &2)));
+        assert_eq!(it.next(), Some((1, 0, &3)));
+        assert_eq!(it.next(), Some((1, 1, &6)));
+        assert_eq!(it.next(), None);
+    }
+
+    #[test]
+    fn csr_csr_dot() {
+        let mut a = DokMatrix::<u8>::new(2, 2);
+        a.insert(0, 0, 1);
+        a.insert(0, 1, 2);
+        a.insert(1, 0, 3);
+
+        let c = a.to_csr().dot(a.to_csr()).to_coo();
         let mut it = c.iter();
         assert_eq!(it.next(), Some((0, 0, &7)));
         assert_eq!(it.next(), Some((0, 1, &2)));

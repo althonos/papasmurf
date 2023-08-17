@@ -1,3 +1,5 @@
+use std::ops::Add;
+
 mod coo;
 mod csc;
 mod csr;
@@ -36,6 +38,11 @@ pub trait NonZeroElements<'m, T: 'm> {
     fn nnz(&'m self) -> usize {
         self.non_zero_elements().len()
     }
+}
+
+pub trait Dot<Rhs = Self> {
+    type Output;
+    fn dot(self, rhs: Rhs) -> Self::Output;
 }
 
 // impl<'mx, T, M: NonZeroElements<T>> NonZeroElements<'mx, T> for &M {
