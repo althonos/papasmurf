@@ -1,13 +1,9 @@
 use std::collections::HashSet;
 
-use lightmotif::abc::Dna;
 use lightmotif::pli::Encode;
 use lightmotif::pli::Score;
 use lightmotif::pli::Threshold;
-use lightmotif::pwm::CountMatrix;
-use lightmotif::seq::EncodedSequence;
 
-use crate::matrix::DenseMatrix;
 use crate::matrix::DokMatrix;
 use crate::primer::Primer;
 use crate::seq::reverse_complement;

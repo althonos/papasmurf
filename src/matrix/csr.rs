@@ -352,7 +352,7 @@ mod test {
 
     #[test]
     fn non_zero_elements() {
-        let mut m1 = CsrMatrix::<u8>::new(2, 2);
+        let m1 = CsrMatrix::<u8>::new(2, 2);
         let mut it = m1.non_zero_elements();
         assert_eq!(it.next(), None);
 

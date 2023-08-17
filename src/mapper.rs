@@ -1,9 +1,7 @@
-use std::collections::HashMap;
-
 use super::db::Database;
-use super::db::KmerTrie;
+
 use super::matrix::CooMatrix;
-use super::matrix::CsrMatrix;
+
 use super::matrix::DenseMatrix;
 use super::matrix::DokMatrix;
 use super::matrix::Dot;
@@ -267,7 +265,7 @@ impl<'db> Mapper<'db> {
         let mut pi = vec![1.0; q_matrix.columns()];
         let mut up = vec![0.0; q_matrix.columns()];
         let mut dens = vec![0.0; q_matrix.rows()];
-        for it in 0..10 {
+        for _it in 0..10 {
             // println!("iteration {}", it);
             dens.fill(0.0);
             for (i, j, x) in q_matrix.non_zero_elements() {
@@ -291,7 +289,7 @@ impl<'db> Mapper<'db> {
                 xj[j] = pi[j] / self.db.amplified[j] as f32;
             }
         }
-        let mut tot = xj.iter().sum::<f32>();
+        let tot = xj.iter().sum::<f32>();
         if tot > 0.0 {
             for j in 0..q_matrix.columns() {
                 xj[j] /= tot;

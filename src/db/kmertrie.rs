@@ -129,7 +129,7 @@ impl KmerTrie {
         }
 
         let mut results = Vec::new();
-        let mut bytes = word.as_bytes();
+        let bytes = word.as_bytes();
         let mut stack = VecDeque::new();
         stack.push_back(State {
             node: 0,

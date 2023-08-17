@@ -1,8 +1,5 @@
 use std::ops::Deref;
 
-use serde::Deserialize;
-use serde::Serialize;
-
 use crate::matrix::DenseMatrix;
 use crate::matrix::MatrixDimensions;
 
@@ -58,7 +55,7 @@ mod de {
     use std::fmt::Result as FmtResult;
 
     use serde::de::Deserializer;
-    use serde::de::Error;
+
     use serde::de::SeqAccess;
     use serde::de::Visitor;
     use serde::Deserialize;

@@ -8,7 +8,7 @@ use serde::Serialize;
 use crate::matrix::CsrMatrix;
 use crate::matrix::DenseMatrix;
 use crate::primer::Primer;
-use crate::utils::Interner;
+
 use crate::utils::OrderedSet;
 use crate::utils::Paired;
 use crate::utils::Rc;
@@ -45,7 +45,7 @@ impl From<UnindexedRegion> for Region {
         //     }
         //     trie
         // });
-        let mut block = region.unique_kmers.as_ref().map(|kmers| {
+        let block = region.unique_kmers.as_ref().map(|kmers| {
             let mut block = DenseMatrix::new(k, kmers.len());
             for (j, kmer) in kmers.iter().enumerate() {
                 for (i, x) in kmer.as_bytes().iter().enumerate() {
