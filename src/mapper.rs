@@ -94,14 +94,29 @@ impl<'db> Mapper<'db> {
         Self {
             expected,
             db,
-            primer_mismatches: 4,
-            kmer_mismatches: 4,
+            primer_mismatches: 2,
+            kmer_mismatches: 2,
             error_probability: 0.005,
             primer_region: 20,
         }
     }
 
-    fn scan(&self, primer: &Primer, sequence: &str) -> (usize, usize) {
+    pub fn with_primer_mismatches(mut self, primer_mismatches: usize) -> Self {
+        self.primer_mismatches = primer_mismatches;
+        self
+    }
+
+    pub fn with_kmer_mismatches(mut self, kmer_mismatches: usize) -> Self {
+        self.kmer_mismatches = kmer_mismatches;
+        self
+    }
+
+    pub fn with_error_probability(mut self, error_probability: f32) -> Self {
+        self.error_probability = error_probability;
+        self
+    }
+
+    fn scan_primer(&self, primer: &Primer, sequence: &str) -> (usize, usize) {
         let offset = self.primer_region.min(sequence.len() - primer.len());
         let mut min_i = usize::MAX;
         let mut min_mm = usize::MAX;
@@ -134,8 +149,8 @@ impl<'db> Mapper<'db> {
             .map(|(r, region)| {
                 (
                     r,
-                    self.scan(&region.primer.forward, &read.forward),
-                    self.scan(&region.primer.backward.reverse_complement(), &read.backward),
+                    self.scan_primer(&region.primer.forward, &read.forward),
+                    self.scan_primer(&region.primer.backward.reverse_complement(), &read.backward),
                 )
             })
             .min_by(|x, y| (x.1 .1 + x.2 .1).partial_cmp(&(y.1 .1 + y.2 .1)).unwrap())

@@ -192,7 +192,9 @@ fn main() {
     // const R2: &str = "samples/SPFS5/SPFS5_L001_R2_001.fastq";
 
     println!("Creating mapper");
-    let mut mapper = Mapper::new(&db);
+    let mut mapper = Mapper::new(&db)
+        .with_kmer_mismatches(10)
+        .with_primer_mismatches(10);
     let mut mapped_reads = 0;
 
     let size = std::fs::metadata(R1).unwrap().len();
