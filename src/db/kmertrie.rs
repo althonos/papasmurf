@@ -1,6 +1,6 @@
+use std::collections::VecDeque;
 use std::num::NonZeroU32;
 use std::rc::Rc;
-use std::collections::VecDeque;
 
 #[derive(Debug, Clone)]
 struct Link<T> {
@@ -10,10 +10,7 @@ struct Link<T> {
 
 impl<T> Link<T> {
     pub fn new(data: T) -> Rc<Self> {
-        Self { 
-            data,
-            prev: None
-        }.into()
+        Self { data, prev: None }.into()
     }
 
     pub fn link(self: &Rc<Self>, data: T) -> Rc<Self> {
@@ -23,8 +20,6 @@ impl<T> Link<T> {
         })
     }
 }
-
-
 
 #[derive(Default, Debug, Clone)]
 struct TrieNode {
@@ -56,26 +51,42 @@ impl KmerTrie {
             current_node = {
                 let mut node = std::mem::take(&mut self.storage[current_node as usize]);
                 let x = match c {
-                    'A' => node.a.get_or_insert_with(|| {
-                        let n = NonZeroU32::new( self.storage.len().try_into().unwrap() ).unwrap();
-                        self.storage.push(Default::default());
-                        n
-                    }).get(),
-                    'C' => node.c.get_or_insert_with(|| {
-                        let n = NonZeroU32::new( self.storage.len().try_into().unwrap() ).unwrap();
-                        self.storage.push(Default::default());
-                        n
-                    }).get(),
-                    'G' => node.g.get_or_insert_with(|| {
-                        let n = NonZeroU32::new( self.storage.len().try_into().unwrap() ).unwrap();
-                        self.storage.push(Default::default());
-                        n
-                    }).get(),
-                    'T' => node.t.get_or_insert_with(|| {
-                        let n = NonZeroU32::new( self.storage.len().try_into().unwrap() ).unwrap();
-                        self.storage.push(Default::default());
-                        n
-                    }).get(),
+                    'A' => node
+                        .a
+                        .get_or_insert_with(|| {
+                            let n =
+                                NonZeroU32::new(self.storage.len().try_into().unwrap()).unwrap();
+                            self.storage.push(Default::default());
+                            n
+                        })
+                        .get(),
+                    'C' => node
+                        .c
+                        .get_or_insert_with(|| {
+                            let n =
+                                NonZeroU32::new(self.storage.len().try_into().unwrap()).unwrap();
+                            self.storage.push(Default::default());
+                            n
+                        })
+                        .get(),
+                    'G' => node
+                        .g
+                        .get_or_insert_with(|| {
+                            let n =
+                                NonZeroU32::new(self.storage.len().try_into().unwrap()).unwrap();
+                            self.storage.push(Default::default());
+                            n
+                        })
+                        .get(),
+                    'T' => node
+                        .t
+                        .get_or_insert_with(|| {
+                            let n =
+                                NonZeroU32::new(self.storage.len().try_into().unwrap()).unwrap();
+                            self.storage.push(Default::default());
+                            n
+                        })
+                        .get(),
                     _ => unreachable!(),
                 };
                 self.storage[current_node as usize] = node;
@@ -129,8 +140,6 @@ impl KmerTrie {
 
         while let Some(state) = stack.pop_back() {
             if state.position == self.k {
-
-
                 let mut s = Vec::new();
                 let mut n = &state.prefix;
 

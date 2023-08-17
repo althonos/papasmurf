@@ -193,8 +193,9 @@ fn main() {
 
     println!("Creating mapper");
     let mut mapper = Mapper::new(&db)
-        .with_kmer_mismatches(10)
-        .with_primer_mismatches(10);
+        .with_kmer_mismatches(50)
+        .with_primer_mismatches(10)
+        .with_partial_hits(true);
     let mut mapped_reads = 0;
 
     let size = std::fs::metadata(R1).unwrap().len();
@@ -219,7 +220,7 @@ fn main() {
         if mapper.add(seq.as_ref().map(|r| r.sequence.as_str())) {
             mapped_reads += 1;
         }
-        // if i > 1000 {
+        // if i > 100 {
         //     break;
         // }
     }

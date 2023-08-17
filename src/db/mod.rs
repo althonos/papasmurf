@@ -5,7 +5,7 @@ mod kmertrie;
 use serde::Deserialize;
 use serde::Serialize;
 
-use crate::matrix::CscMatrix;
+use crate::matrix::CsrMatrix;
 use crate::matrix::DenseMatrix;
 use crate::primer::Primer;
 use crate::utils::Interner;
@@ -26,7 +26,7 @@ struct UnindexedRegion {
     /// The set of forward and backward k-mers in this region.
     pub unique_kmers: Paired<OrderedSet<Rc<str>>>,
     /// A sparse matrix storing the k-mer pair for each database reference.
-    pub matrix: CscMatrix<f32>,
+    pub matrix: CsrMatrix<f32>,
 }
 
 impl From<UnindexedRegion> for Region {
@@ -38,19 +38,30 @@ impl From<UnindexedRegion> for Region {
             .next()
             .map(|kmer| kmer.len())
             .unwrap_or_default();
-        let mut trie = region.unique_kmers.as_ref().map(|kmers| {
-            let mut trie = KmerTrie::new(k);
-            for kmer in kmers.iter() {
-                trie.insert(kmer);
+        // let mut trie = region.unique_kmers.as_ref().map(|kmers| {
+        //     let mut trie = KmerTrie::new(k);
+        //     for kmer in kmers.iter() {
+        //         trie.insert(kmer);
+        //     }
+        //     trie
+        // });
+        let mut block = region.unique_kmers.as_ref().map(|kmers| {
+            let mut block = DenseMatrix::new(k, kmers.len());
+            for (j, kmer) in kmers.iter().enumerate() {
+                for (i, x) in kmer.as_bytes().iter().enumerate() {
+                    block[i][j] = *x;
+                }
             }
-            trie
+            block
         });
+
         Self {
             primer: region.primer,
             unique_pairs: region.unique_pairs,
             unique_kmers: region.unique_kmers,
             matrix: region.matrix,
-            trie,
+            // trie,
+            block,
         }
     }
 }
@@ -75,10 +86,14 @@ pub struct Region {
     pub unique_pairs: OrderedSet<Paired<usize>>,
     /// The set of forward and backward k-mers in this region.
     pub unique_kmers: Paired<OrderedSet<Rc<str>>>,
-    /// A trie storing the unique kmers for the forward and backward region.
-    pub trie: Paired<KmerTrie>,
+
+    // /// A pair of tries storing the unique kmers for the forward and backward region.
+    // pub trie: Paired<KmerTrie>,
+    /// A pair of blocks storing the unique kmers for the forward and backward region.
+    pub block: Paired<DenseMatrix<u8>>,
+
     /// A sparse matrix storing the k-mer pair for each database reference.
-    pub matrix: CscMatrix<f32>,
+    pub matrix: CsrMatrix<f32>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

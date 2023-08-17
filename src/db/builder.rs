@@ -235,7 +235,7 @@ impl Builder {
                 UnindexedRegion {
                     primer: primer.clone(),
                     unique_pairs,
-                    matrix: matrix.to_csc(),
+                    matrix: matrix.to_csr(),
                     unique_kmers: unique,
                 }
                 .into(),
