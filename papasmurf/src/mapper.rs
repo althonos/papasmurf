@@ -321,7 +321,6 @@ impl<D: AsRef<Database>> Mapper<D> {
         }
 
         // Compute the pi_j vector
-        println!("Computing Pi vector");
         let mut pi = vec![1.0; q_matrix.columns()];
         let mut up = vec![0.0; q_matrix.columns()];
         let mut dens = vec![0.0; q_matrix.rows()];
@@ -342,7 +341,7 @@ impl<D: AsRef<Database>> Mapper<D> {
             }
         }
 
-        println!("Computing X_j vector");
+        // Compute the X_j matrix
         let mut xj = vec![0.0; q_matrix.columns()];
         for j in 0..q_matrix.columns() {
             if db.amplified[j] > 0 {

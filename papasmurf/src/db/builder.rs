@@ -11,14 +11,20 @@ use crate::utils::Interner;
 use crate::utils::OrderedSet;
 use crate::utils::Paired;
 use crate::utils::Rc;
+use crate::errors::Error;
 
 use super::Database;
 use super::UnindexedRegion;
 
+/// The k-mer sketched from a single sequence.
+/// 
+/// The k-mer are stored as raw strings at this stage, and will be later
+/// deduplicated when the builder is transformed into a fully-indexed database.
 #[derive(Debug, Clone)]
 struct Sketch {
+    /// The idenfitier of the reference this sketch originates from.
     pub id: Rc<str>,
-    // pub primer: Paired<Rc<str>>,
+    /// The forward and backward k-mers extracted from the reference sequence.
     pub kmer: Paired<Rc<str>>,
 }
 
@@ -58,7 +64,11 @@ impl Builder {
     /// Returns the number of region k-mers successfully extracted from the
     /// sequence.
     ///
-    pub fn add<I>(&mut self, id: I, sequence: &str) -> usize
+    /// # Error
+    /// The method will return an error when `sequence` does not contain valid 
+    /// DNA symbols (*A*, *T*, *G*, *C* or *N*).
+    /// 
+    pub fn add<I>(&mut self, id: I, sequence: &str) -> Result<usize, Error>
     where
         I: AsRef<str>,
     {
@@ -75,8 +85,6 @@ impl Builder {
                 $pli.score_into(&$striped, &$primer.profile, &mut $scores);
                 $pos = 0;
                 $mm = usize::MAX;
-                // $pos = $pli.argmax(&$scores).unwrap();
-                // $mm = $primer.mismatches(&$seq[$pos..$pos + $primer.len()]);
                 let indices = $pli.threshold(&$scores, 0.0);
                 for i in indices {
                     let mm_i = $primer.mismatches(&$seq[i..i + $primer.len()]);
@@ -91,12 +99,14 @@ impl Builder {
             }};
         }
 
+        // Create a lightmotif pipeline to search for the primer.
         let pli = lightmotif::Pipeline::avx2().unwrap();
-        let mut scores = lightmotif::pli::StripedScores::empty();
+        let mut scores = lightmotif::pli::StripedScores::<lightmotif::num::U32>::empty();
 
+        // Encode the input sequence
         let mut striped = match pli.encode(&sequence[..sequence.len() - self.k]) {
             Ok(encoded) => lightmotif::seq::EncodedSequence::from(encoded).to_striped(),
-            Err(_) => return 0,
+            Err(_) => return Err(Error::InvalidDna),
         };
         if let Some(profile) = self
             .primers
@@ -159,7 +169,7 @@ impl Builder {
             );
             let bwd_kmer = self
                 .interner
-                .intern(&reverse_complement(&sequence[bwd_pos - self.k..bwd_pos]));
+                .intern(&reverse_complement(&sequence[bwd_pos - self.k..bwd_pos])?);
 
             // Add the amplified k-mer to the current region.
             amplified += 1;
@@ -170,7 +180,7 @@ impl Builder {
             });
         }
 
-        amplified
+        Ok(amplified)
     }
 
     /// Build the final database.

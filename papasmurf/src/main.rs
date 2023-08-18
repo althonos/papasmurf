@@ -54,24 +54,24 @@ fn main() {
         // Create a new database builder from the given primers
         let mut builder = Builder::new(vec![
             Paired::new(
-                Primer::new("TGGCGAACGGGTGAGTAA"),
-                Primer::new(reverse_complement("CCGTGTCTCAGTCCCARTG")),
+                Primer::new("TGGCGAACGGGTGAGTAA").unwrap(),
+                Primer::new("CCGTGTCTCAGTCCCARTG").unwrap().reverse_complement(),
             ),
             Paired::new(
-                Primer::new("ACTCCTACGGGAGGCAGC"),
-                Primer::new(reverse_complement("GTATTACCGCGGCTGCTG")),
+                Primer::new("ACTCCTACGGGAGGCAGC").unwrap(),
+                Primer::new("GTATTACCGCGGCTGCTG").unwrap().reverse_complement(),
             ),
             Paired::new(
-                Primer::new("GTGTAGCGGTGRAATGCG"),
-                Primer::new(reverse_complement("CCCGTCAATTCMTTTGAGTT")),
+                Primer::new("GTGTAGCGGTGRAATGCG").unwrap(),
+                Primer::new("CCCGTCAATTCMTTTGAGTT").unwrap().reverse_complement(),
             ),
             Paired::new(
-                Primer::new("GGAGCATGTGGWTTAATTCGA"),
-                Primer::new(reverse_complement("CGTTGCGGGACTTAACCC")),
+                Primer::new("GGAGCATGTGGWTTAATTCGA").unwrap(),
+                Primer::new("CGTTGCGGGACTTAACCC").unwrap().reverse_complement(),
             ),
             Paired::new(
-                Primer::new("GGAGGAAGGTGGGGATGAC"),
-                Primer::new(reverse_complement("AAGGCCCGGGAACGTATT")),
+                Primer::new("GGAGGAAGGTGGGGATGAC").unwrap(),
+                Primer::new("AAGGCCCGGGAACGTATT").unwrap().reverse_complement(),
             ),
             // Paired::new(
             //     "TGGCGGACGGGTGAGTAA",
@@ -106,7 +106,7 @@ fn main() {
         ]);
 
         // Load reference sequences
-        const DB: &'static str = "gg_13_5.fasta.gz";
+        const DB: &'static str = "../gg_13_5.fasta.gz";
         // const DB: &'static str = "SILVA_138.1_SSURef_NR99_tax_silva_trunc.fasta.gz";
         let size = std::fs::metadata(DB).unwrap().len();
         let pb = indicatif::ProgressBar::new(size as u64)
@@ -122,12 +122,12 @@ fn main() {
         let mut n = 0;
         for (i, read) in reader.map(Result::unwrap).enumerate() {
             let seq = read.sequence.replace('U', "T");
-            let n_ambiguous = count_ambiguous(&seq);
+            let n_ambiguous = count_ambiguous(&seq).unwrap();
             if n_ambiguous == 0 {
                 builder.add(&read.id, &seq);
                 n += 1;
             } else if n_ambiguous <= 3 {
-                for dna in DesambiguationIterator::new(&seq) {
+                for dna in DesambiguationIterator::new(&seq).unwrap() {
                     builder.add(&read.id, &dna);
                 }
                 n += 1;
@@ -194,7 +194,7 @@ fn main() {
     println!("Creating mapper");
     let mut mapper = Mapper::new(&db)
         .with_kmer_mismatches(10)
-        .with_primer_mismatches(10)
+        .with_primer_mismatches(2)
         .with_partial_hits(true);
     let mut mapped_reads = std::sync::atomic::AtomicUsize::new(0);
 
@@ -251,9 +251,10 @@ fn main() {
         println!("[r={}] extracted: {}", r, mapper.expected[r].len());
     }
 
+    println!("Reconstructing");
     let result = mapper.finish();
 
-    let reader = std::fs::File::open("gg_13_5_taxonomy.txt.gz")
+    let reader = std::fs::File::open("../gg_13_5_taxonomy.txt.gz")
         .map(flate2::read::GzDecoder::new)
         .map(std::io::BufReader::new)
         .unwrap();

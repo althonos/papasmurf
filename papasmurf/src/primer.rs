@@ -9,6 +9,7 @@ use lightmotif::pwm::ScoringMatrix;
 use crate::seq::mismatches;
 use crate::seq::reverse_complement;
 use crate::seq::DesambiguationIterator;
+use crate::errors::Error;
 
 fn _minscore(
     data: &DenseMatrix<f32, <Dna as Alphabet>::K>,
@@ -53,18 +54,19 @@ pub struct Primer {
 }
 
 impl Primer {
-    pub fn new<S: Into<String>>(template: S) -> Self {
+    pub fn new<S: Into<String>>(template: S) -> Result<Self, Error> {
         let t = template.into();
-        let encoded = DesambiguationIterator::new(&t)
-            .map(|s| lightmotif::EncodedSequence::encode(&s).unwrap());
+        let encoded = DesambiguationIterator::new(&t)?
+            .map(|s| lightmotif::EncodedSequence::encode(&s)
+                .expect("DesambiguationIterator only produces valid DNA strings"));
         let pssm = lightmotif::CountMatrix::from_sequences(encoded)
             .unwrap()
             .to_freq(0.1)
             .to_scoring(None);
-        Self {
+        Ok(Self {
             template: t,
             profile: pssm,
-        }
+        })
     }
 
     pub fn len(&self) -> usize {
@@ -79,7 +81,9 @@ impl Primer {
 
     /// Get the reverse complement of this primer.
     pub fn reverse_complement(&self) -> Primer {
-        Self::new(reverse_complement(&self.template))
+        reverse_complement(&self.template)
+            .and_then(Self::new)
+            .expect("Primer.reverse_complement always produces a valid Primer")
     }
 }
 
@@ -109,7 +113,7 @@ mod de {
     use serde::de::Deserializer;
     use serde::de::Error as DeError;
     use serde::de::Visitor;
-
+    use serde::de::Unexpected;
     use serde::Deserialize;
 
     struct PrimerVisitor;
@@ -122,7 +126,8 @@ mod de {
         }
 
         fn visit_str<E: DeError>(self, s: &str) -> Result<Self::Value, E> {
-            Ok(Primer::new(s))
+            Primer::new(s)
+                .map_err(|_| DeError::invalid_value(Unexpected::Str(s), &self))
         }
     }
 

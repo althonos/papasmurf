@@ -1,18 +1,26 @@
 use crate::utils::Rc;
+use crate::errors::Error;
 
-pub fn is_ambiguous(c: char) -> bool {
+#[inline]
+pub fn is_ambiguous(c: char) -> Result<bool, Error> {
     match c {
-        'A' | 'T' | 'C' | 'G' | 'U' => false,
-        'R' | 'Y' | 'S' | 'W' | 'M' | 'K' | 'B' | 'D' | 'H' | 'V' | 'N' => true,
-        _ => unreachable!(),
+        'A' | 'T' | 'C' | 'G' | 'U' => Ok(false),
+        'R' | 'Y' | 'S' | 'W' | 'M' | 'K' | 'B' | 'D' | 'H' | 'V' | 'N' => Ok(true),
+        _ => Err(Error::InvalidDna),
     }
 }
 
-pub fn count_ambiguous(s: &str) -> usize {
-    s.chars().filter(|&c| is_ambiguous(c)).count()
+pub fn count_ambiguous(s: &str) -> Result<usize, Error> {
+    let mut n = 0;
+    for c in s.chars() {
+        if is_ambiguous(c)? {
+            n += 1;
+        }
+    }
+    Ok(n)
 }
 
-pub fn reverse_complement(s: &str) -> String {
+pub fn reverse_complement(s: &str) -> Result<String, Error> {
     let mut rev = String::with_capacity(s.len());
     for x in s.chars().rev() {
         rev.push(match x {
@@ -37,10 +45,10 @@ pub fn reverse_complement(s: &str) -> String {
 
             'N' => 'N',
 
-            _ => panic!(),
+            _ => return Err(Error::InvalidDna),
         })
     }
-    rev
+    Ok(rev)
 }
 
 pub fn dna_match(c1: char, c2: char) -> bool {
@@ -65,6 +73,7 @@ pub fn dna_match(c1: char, c2: char) -> bool {
         'V' => c2 == 'A' || c2 == 'C' || c2 == 'G',
 
         'N' => c2 == 'A' || c2 == 'G' || c2 == 'T' || c2 == 'C',
+        
         _ => unreachable!(),
     }
 }
@@ -86,7 +95,7 @@ pub struct DesambiguationIterator<'a> {
 }
 
 impl<'a> DesambiguationIterator<'a> {
-    pub fn new(sequence: &'a str) -> Self {
+    pub fn new(sequence: &'a str) -> Result<Self, Error> {
         let buffer = Rc::new(String::new());
         let mut pos = Vec::new();
         let mut state = Vec::new();
@@ -96,7 +105,7 @@ impl<'a> DesambiguationIterator<'a> {
         for (i, c) in sequence
             .chars()
             .enumerate()
-            .filter(|(_, c)| is_ambiguous(*c))
+            .filter(|(_, c)| is_ambiguous(*c).unwrap_or(true))
         {
             let var = match c {
                 'R' => "AG",
@@ -110,7 +119,7 @@ impl<'a> DesambiguationIterator<'a> {
                 'H' => "ACT",
                 'V' => "ACG",
                 'N' => "ACGT",
-                _ => unreachable!(),
+                _ => return Err(Error::InvalidDna),
             };
 
             remaining *= var.len();
@@ -119,14 +128,14 @@ impl<'a> DesambiguationIterator<'a> {
             state.push(var.len() - 1);
         }
 
-        DesambiguationIterator {
+        Ok(DesambiguationIterator {
             buffer,
             pos,
             state,
             variants,
             remaining,
             sequence,
-        }
+        })
     }
 }
 
@@ -170,8 +179,8 @@ impl<'a> Iterator for DesambiguationIterator<'a> {
     }
 }
 
-pub fn disambiguate<'a>(s: &'a str) -> Vec<String> {
-    DesambiguationIterator::new(s)
+pub fn disambiguate<'a>(s: &'a str) -> Result<Vec<String>, Error> {
+    Ok(DesambiguationIterator::new(s)?
         .map(|s| s.clone().as_ref().to_owned())
-        .collect()
+        .collect())
 }
