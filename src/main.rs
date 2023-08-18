@@ -129,9 +129,9 @@ fn main() {
                 }
                 n += 1;
             }
-            // if i > 1000000 {
-            //     break;
-            // }
+            if i > 1000000 {
+                break;
+            }
         }
 
         pb.finish_and_clear();
@@ -182,18 +182,18 @@ fn main() {
     // const R2: &str = "Example_L001_R2_001.fastq";
     // const R1: &str = "samples/PO49S4/PO49S4_L001_R1_001.fastq";
     // const R2: &str = "samples/PO49S4/PO49S4_L001_R2_001.fastq";
-    const R1: &str = "samples/MCS7/MCS7_L001_R1_001.fastq";
-    const R2: &str = "samples/MCS7/MCS7_L001_R2_001.fastq";
+    // const R1: &str = "samples/MCS7/MCS7_L001_R1_001.fastq";
+    // const R2: &str = "samples/MCS7/MCS7_L001_R2_001.fastq";
     // const R1: &str = "samples/GFS6/GFS6_L001_R1_001.fastq";
     // const R2: &str = "samples/GFS6/GFS6_L001_R2_001.fastq";
     // const R1: &str = "raw/Q5RES023A1_20230327091114__MC_S7_R1_001.fastq";
     // const R2: &str = "raw/Q5RES023A1_20230327091114__MC_S7_R2_001.fastq";
-    // const R1: &str = "samples/SPFS5/SPFS5_L001_R1_001.fastq";
-    // const R2: &str = "samples/SPFS5/SPFS5_L001_R2_001.fastq";
+    const R1: &str = "samples/SPFS5/SPFS5_L001_R1_001.fastq";
+    const R2: &str = "samples/SPFS5/SPFS5_L001_R2_001.fastq";
 
     println!("Creating mapper");
     let mut mapper = Mapper::new(&db)
-        .with_kmer_mismatches(50)
+        .with_kmer_mismatches(10)
         .with_primer_mismatches(10)
         .with_partial_hits(true);
     let mut mapped_reads = 0;
@@ -215,21 +215,28 @@ fn main() {
     // let pli = lightmotif::Pipeline::<lightmotif::Dna, _>::avx2().unwrap();
     // let mut scores = lightmotif::pli::StripedScores::<lightmotif::num::U32>::empty();
 
-    for (i, res) in r1_reader.zip(r2_reader).map(Paired::from).enumerate() {
-        let seq = res.map(Result::unwrap);
-        if mapper.add(seq.as_ref().map(|r| r.sequence.as_str())) {
+    let reads = r1_reader
+        .zip(r2_reader)
+        .map(Paired::from)
+        .map(|res| res.map(Result::unwrap))
+        .collect::<Vec<_>>();
+    for (i, read) in reads.iter().enumerate() {
+        if mapper.add(read.as_ref().map(|r| r.sequence.as_str())) {
             mapped_reads += 1;
         }
-        // if i > 100 {
-        //     break;
-        // }
+        if i >= 100 {
+            break;
+        }
     }
-    println!("Processed {} reads", mapper.expected[0].rows());
+    println!(
+        "Processed {} reads",
+        mapper.reads.load(std::sync::atomic::Ordering::Relaxed)
+    );
     println!("Mapped {} reads", mapped_reads);
     pb.finish_and_clear();
 
     for r in 0..db.regions.len() {
-        println!("[r={}] extracted: {}", r, mapper.expected[r].nnz());
+        println!("[r={}] extracted: {}", r, mapper.expected[r].len());
     }
 
     let result = mapper.finish();

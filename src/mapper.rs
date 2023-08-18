@@ -1,3 +1,8 @@
+use std::sync::atomic::AtomicUsize;
+use std::sync::atomic::Ordering;
+use std::sync::Arc;
+use std::sync::RwLock;
+
 use super::db::Database;
 use super::matrix::CooMatrix;
 use super::matrix::DenseMatrix;
@@ -72,24 +77,58 @@ fn simd_mismatches(query: &[u8], db: &DenseMatrix<u8>, out: &mut [u8]) {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
+pub struct CooBuilder<T> {
+    data: RwLock<Vec<(usize, usize, T)>>,
+}
+
+impl<T> CooBuilder<T> {
+    pub fn new() -> Self {
+        Self {
+            data: RwLock::new(Vec::new()),
+        }
+    }
+
+    pub fn insert(&self, i: usize, j: usize, x: T) {
+        let mut w = self.data.write().expect("lock was poisoned");
+        w.push((i, j, x));
+    }
+
+    pub fn len(&self) -> usize {
+        let mut r = self.data.read().expect("lock was poisoned");
+        r.len()
+    }
+}
+
+impl<T: Clone> CooBuilder<T> {
+    pub fn to_coo_with_dimensions(&self, rows: usize, cols: usize) -> CooMatrix<T> {
+        let mut w = self.data.write().expect("lock was poisoned");
+        w.sort_by_key(|&(i, j, _)| (i, j));
+
+        let mut coo = CooMatrix::new(rows, cols);
+        for (i, j, x) in w.iter() {
+            coo.insert(*i, *j, x.clone());
+        }
+
+        coo
+    }
+}
+
+#[derive(Debug)]
 pub struct Mapper<'db> {
     pub db: &'db Database,
-    pub expected: Vec<DokMatrix<f32>>,
+    pub expected: Vec<CooBuilder<f32>>,
     primer_mismatches: usize,
     kmer_mismatches: usize,
     error_probability: f32,
     primer_region: usize,
     partial_hits: bool,
+    pub reads: AtomicUsize,
 }
 
 impl<'db> Mapper<'db> {
     pub fn new(db: &'db Database) -> Self {
-        let expected = db
-            .regions
-            .iter()
-            .map(|region| DokMatrix::new(0, region.unique_pairs.len()))
-            .collect();
+        let expected = db.regions.iter().map(|_| CooBuilder::new()).collect();
         Self {
             expected,
             db,
@@ -98,6 +137,7 @@ impl<'db> Mapper<'db> {
             error_probability: 0.005,
             primer_region: 20,
             partial_hits: false,
+            reads: AtomicUsize::new(0),
         }
     }
 
@@ -122,7 +162,6 @@ impl<'db> Mapper<'db> {
     }
 
     fn scan_primer(&self, primer: &Primer, sequence: &str) -> (isize, usize) {
-
         let min_offset = -(primer.len() as isize) + 1;
         let max_offset = self.primer_region.min(sequence.len() - primer.len()) as isize;
 
@@ -136,7 +175,7 @@ impl<'db> Mapper<'db> {
                 super::seq::mismatches(q, t) + (-i) as usize
             } else {
                 let q = &primer.template;
-                let t = &sequence[i as usize..(i+primer.len() as isize) as usize];
+                let t = &sequence[i as usize..(i + primer.len() as isize) as usize];
                 super::seq::mismatches(q, t)
             };
             if mm == 0 {
@@ -151,12 +190,9 @@ impl<'db> Mapper<'db> {
         (min_i, min_mm)
     }
 
-    pub fn add(&mut self, read: Paired<&str>) -> bool {
+    pub fn add(&self, read: Paired<&str>) -> bool {
         // Add a new row to the E_i,h matrices
-        let i = self.expected[0].rows();
-        for e in self.expected.iter_mut() {
-            e.grow(1, 0);
-        }
+        let i = self.reads.fetch_add(1, Ordering::Relaxed);
 
         // Find the best matching primer and primer position
         let (r, pos, primer_mismatches) = self
@@ -183,7 +219,9 @@ impl<'db> Mapper<'db> {
         let region = &self.db.regions[r];
 
         // Skip if primers mismatch the reads
-        if primer_mismatches.forward > self.primer_mismatches || primer_mismatches.backward > self.primer_mismatches{
+        if primer_mismatches.forward > self.primer_mismatches
+            || primer_mismatches.backward > self.primer_mismatches
+        {
             return false;
         }
 
@@ -245,9 +283,12 @@ impl<'db> Mapper<'db> {
             // if let Some(mm_fwd) = mismatch.forward.get(&pair.forward) {
             // if let Some(mm_bwd) = mismatch.backward.get(&pair.backward) {
             // let ne = (mm_fwd + mm_bwd) as usize;
-            if mismatch.forward[pair.forward] as usize <= self.kmer_mismatches && mismatch.backward[pair.backward] as usize <= self.kmer_mismatches {
+            if mismatch.forward[pair.forward] as usize <= self.kmer_mismatches
+                && mismatch.backward[pair.backward] as usize <= self.kmer_mismatches
+            {
                 let l = kmer.forward.len() + kmer.backward.len();
-                let ne = (mismatch.forward[pair.forward] + mismatch.backward[pair.backward]) as usize;
+                let ne =
+                    (mismatch.forward[pair.forward] + mismatch.backward[pair.backward]) as usize;
                 let e = (self.error_probability / 3.0).powf(ne as f32)
                     * (1.0 - self.error_probability).powf((l - ne) as f32);
                 if e > 0.0 {
@@ -265,9 +306,11 @@ impl<'db> Mapper<'db> {
     pub fn finish(self) -> MapperResult {
         // Compute the Q_i,j matrix
         println!("Computing Q matrix");
-        let mut q_matrix = CooMatrix::<f32>::new(self.expected[0].rows(), self.db.names.len());
+        let mut q_matrix =
+            CooMatrix::<f32>::new(self.reads.load(Ordering::Relaxed), self.db.names.len());
         for (region, expected) in self.db.regions.iter().zip(self.expected) {
-            let q = expected.to_csr().dot(&region.matrix);
+            let e = expected.to_coo_with_dimensions(q_matrix.rows(), region.unique_pairs.len());
+            let q = e.to_csr().dot(&region.matrix);
             q_matrix = q_matrix + q.to_coo();
         }
 
