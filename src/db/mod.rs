@@ -107,3 +107,9 @@ pub struct Database {
     /// The number of k-mers extracted from each database reference (R vector).
     pub amplified: Vec<u8>,
 }
+
+impl AsRef<Database> for &Database {
+    fn as_ref(&self) -> &Database {
+        *self
+    }
+}

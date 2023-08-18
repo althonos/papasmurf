@@ -1,12 +1,10 @@
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
-use std::sync::Arc;
 use std::sync::RwLock;
 
 use super::db::Database;
 use super::matrix::CooMatrix;
 use super::matrix::DenseMatrix;
-use super::matrix::DokMatrix;
 use super::matrix::Dot;
 use super::matrix::MatrixDimensions;
 use super::matrix::NonZeroElements;
@@ -95,7 +93,7 @@ impl<T> CooBuilder<T> {
     }
 
     pub fn len(&self) -> usize {
-        let mut r = self.data.read().expect("lock was poisoned");
+        let r = self.data.read().expect("lock was poisoned");
         r.len()
     }
 }
@@ -115,8 +113,8 @@ impl<T: Clone> CooBuilder<T> {
 }
 
 #[derive(Debug)]
-pub struct Mapper<'db> {
-    pub db: &'db Database,
+pub struct Mapper<D: AsRef<Database>> {
+    pub db: D,
     pub expected: Vec<CooBuilder<f32>>,
     primer_mismatches: usize,
     kmer_mismatches: usize,
@@ -126,9 +124,14 @@ pub struct Mapper<'db> {
     pub reads: AtomicUsize,
 }
 
-impl<'db> Mapper<'db> {
-    pub fn new(db: &'db Database) -> Self {
-        let expected = db.regions.iter().map(|_| CooBuilder::new()).collect();
+impl<D: AsRef<Database>> Mapper<D> {
+    pub fn new(db: D) -> Self {
+        let expected = db
+            .as_ref()
+            .regions
+            .iter()
+            .map(|_| CooBuilder::new())
+            .collect();
         Self {
             expected,
             db,
@@ -191,32 +194,34 @@ impl<'db> Mapper<'db> {
     }
 
     pub fn add(&self, read: Paired<&str>) -> bool {
+        let db = self.db.as_ref();
+
         // Add a new row to the E_i,h matrices
         let i = self.reads.fetch_add(1, Ordering::Relaxed);
 
         // Find the best matching primer and primer position
-        let (r, pos, primer_mismatches) = self
-            .db
+        let (r, region, pos, primer_mismatches) = db
             .regions
             .iter()
             .enumerate()
             .map(|(r, region)| {
                 (
                     r,
+                    region,
                     self.scan_primer(&region.primer.forward, &read.forward),
                     self.scan_primer(&region.primer.backward.reverse_complement(), &read.backward),
                 )
             })
-            .min_by(|x, y| (x.1 .1 + x.2 .1).partial_cmp(&(y.1 .1 + y.2 .1)).unwrap())
+            .min_by(|x, y| (x.2 .1 + x.3 .1).partial_cmp(&(y.2 .1 + y.3 .1)).unwrap())
             .map(|x| {
                 (
                     x.0,
-                    Paired::new(x.1 .0, x.2 .0),
-                    Paired::new(x.1 .1, x.2 .1),
+                    x.1,
+                    Paired::new(x.2 .0, x.3 .0),
+                    Paired::new(x.2 .1, x.3 .1),
                 )
             })
             .unwrap();
-        let region = &self.db.regions[r];
 
         // Skip if primers mismatch the reads
         if primer_mismatches.forward > self.primer_mismatches
@@ -233,14 +238,14 @@ impl<'db> Mapper<'db> {
 
         // Check that the kmer is long enough for the database regions or that
         // partial mapping is enabled in the mapper.
-        if kmer.forward.len() > self.db.k {
-            kmer.forward = &kmer.forward[..self.db.k];
-        } else if kmer.forward.len() < self.db.k && !self.partial_hits {
+        if kmer.forward.len() > db.k {
+            kmer.forward = &kmer.forward[..db.k];
+        } else if kmer.forward.len() < db.k && !self.partial_hits {
             return false;
         }
-        if kmer.backward.len() > self.db.k {
-            kmer.backward = &kmer.backward[..self.db.k];
-        } else if kmer.backward.len() < self.db.k && !self.partial_hits {
+        if kmer.backward.len() > db.k {
+            kmer.backward = &kmer.backward[..db.k];
+        } else if kmer.backward.len() < db.k && !self.partial_hits {
             return false;
         }
 
@@ -304,11 +309,12 @@ impl<'db> Mapper<'db> {
     }
 
     pub fn finish(self) -> MapperResult {
+        let db = self.db.as_ref();
+
         // Compute the Q_i,j matrix
-        println!("Computing Q matrix");
         let mut q_matrix =
-            CooMatrix::<f32>::new(self.reads.load(Ordering::Relaxed), self.db.names.len());
-        for (region, expected) in self.db.regions.iter().zip(self.expected) {
+            CooMatrix::<f32>::new(self.reads.load(Ordering::Relaxed), db.names.len());
+        for (region, expected) in db.regions.iter().zip(self.expected) {
             let e = expected.to_coo_with_dimensions(q_matrix.rows(), region.unique_pairs.len());
             let q = e.to_csr().dot(&region.matrix);
             q_matrix = q_matrix + q.to_coo();
@@ -339,8 +345,8 @@ impl<'db> Mapper<'db> {
         println!("Computing X_j vector");
         let mut xj = vec![0.0; q_matrix.columns()];
         for j in 0..q_matrix.columns() {
-            if self.db.amplified[j] > 0 {
-                xj[j] = pi[j] / self.db.amplified[j] as f32;
+            if db.amplified[j] > 0 {
+                xj[j] = pi[j] / db.amplified[j] as f32;
             }
         }
         let tot = xj.iter().sum::<f32>();
