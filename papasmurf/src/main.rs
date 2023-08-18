@@ -53,26 +53,22 @@ fn main() {
 
         // Create a new database builder from the given primers
         let mut builder = Builder::new(vec![
-            Paired::new(
-                Primer::new("TGGCGAACGGGTGAGTAA").unwrap(),
-                Primer::new("CCGTGTCTCAGTCCCARTG").unwrap().reverse_complement(),
-            ),
-            Paired::new(
-                Primer::new("ACTCCTACGGGAGGCAGC").unwrap(),
-                Primer::new("GTATTACCGCGGCTGCTG").unwrap().reverse_complement(),
-            ),
-            Paired::new(
-                Primer::new("GTGTAGCGGTGRAATGCG").unwrap(),
-                Primer::new("CCCGTCAATTCMTTTGAGTT").unwrap().reverse_complement(),
-            ),
-            Paired::new(
-                Primer::new("GGAGCATGTGGWTTAATTCGA").unwrap(),
-                Primer::new("CGTTGCGGGACTTAACCC").unwrap().reverse_complement(),
-            ),
-            Paired::new(
-                Primer::new("GGAGGAAGGTGGGGATGAC").unwrap(),
-                Primer::new("AAGGCCCGGGAACGTATT").unwrap().reverse_complement(),
-            ),
+            Paired::new("TGGCGAACGGGTGAGTAA", "CCGTGTCTCAGTCCCARTG")
+                .map(Primer::new)
+                .map(Result::unwrap),
+            Paired::new("ACTCCTACGGGAGGCAGC", "GTATTACCGCGGCTGCTG")
+                .map(Primer::new)
+                .map(Result::unwrap),
+            Paired::new("GTGTAGCGGTGRAATGCG", "CCCGTCAATTCMTTTGAGTT")
+                .map(Primer::new)
+                .map(Result::unwrap),
+            Paired::new("GGAGCATGTGGWTTAATTCGA", "CGTTGCGGGACTTAACCC")
+                .map(Primer::new)
+                .map(Result::unwrap),
+            Paired::new("GGAGGAAGGTGGGGATGAC", "AAGGCCCGGGAACGTATT")
+                .map(Primer::new)
+                .map(Result::unwrap),
+
             // Paired::new(
             //     "TGGCGGACGGGTGAGTAA",
             //     &reverse_complement("CTGCTGCCTCCCGTAGGA"),
@@ -194,7 +190,7 @@ fn main() {
     println!("Creating mapper");
     let mut mapper = Mapper::new(&db)
         .with_kmer_mismatches(10)
-        .with_primer_mismatches(2)
+        .with_primer_mismatches(10)
         .with_partial_hits(true);
     let mut mapped_reads = std::sync::atomic::AtomicUsize::new(0);
 

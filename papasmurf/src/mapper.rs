@@ -209,7 +209,7 @@ impl<D: AsRef<Database>> Mapper<D> {
                     r,
                     region,
                     self.scan_primer(&region.primer.forward, &read.forward),
-                    self.scan_primer(&region.primer.backward.reverse_complement(), &read.backward),
+                    self.scan_primer(&region.primer.backward, &read.backward),
                 )
             })
             .min_by(|x, y| (x.2 .1 + x.3 .1).partial_cmp(&(y.2 .1 + y.3 .1)).unwrap())
@@ -250,23 +250,6 @@ impl<D: AsRef<Database>> Mapper<D> {
         }
 
         // Compute mismatches between the read kmer and all the database kmers
-        // let mut mismatch = Paired::<HashMap<usize, u8>>::default();
-        // for (x, mm) in region
-        //     .trie
-        //     .forward
-        //     .fuzzy_search(kmer.forward, self.kmer_mismatches)
-        // {
-        //     let h = region.unique_kmers.forward[x.as_str()];
-        //     mismatch.forward.insert(h, mm as u8);
-        // }
-        // for (x, mm) in region
-        //     .trie
-        //     .backward
-        //     .fuzzy_search(kmer.backward, self.kmer_mismatches)
-        // {
-        //     let h = region.unique_kmers.backward[x.as_str()];
-        //     mismatch.backward.insert(h, mm as u8);
-        // }
         let mut mismatch = region
             .block
             .as_ref()
@@ -285,9 +268,6 @@ impl<D: AsRef<Database>> Mapper<D> {
         // Record the read if it matches any database kmer
         let mut mapped = false;
         for (h, pair) in region.unique_pairs.iter().enumerate() {
-            // if let Some(mm_fwd) = mismatch.forward.get(&pair.forward) {
-            // if let Some(mm_bwd) = mismatch.backward.get(&pair.backward) {
-            // let ne = (mm_fwd + mm_bwd) as usize;
             if mismatch.forward[pair.forward] as usize <= self.kmer_mismatches
                 && mismatch.backward[pair.backward] as usize <= self.kmer_mismatches
             {
@@ -301,8 +281,6 @@ impl<D: AsRef<Database>> Mapper<D> {
                     mapped = true;
                 }
             }
-            // }
-            // }
         }
 
         mapped

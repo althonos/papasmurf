@@ -44,10 +44,18 @@ pub struct Builder {
 
 impl Builder {
     /// Create a new database builder using the given primers.
-    pub fn new(primers: Vec<Paired<Primer>>) -> Self {
+    pub fn new(mut primers: Vec<Paired<Primer>>) -> Self {
+        assert!(primers.len() < u8::MAX as usize);
+
+        // Store sketches independently for each region.
         let mut sketches = Vec::with_capacity(primers.len());
         for _ in 0..primers.len() {
             sketches.push(Vec::new());
+        }
+
+        // Reverse-complement the backward primer.
+        for pair in primers.iter_mut() {
+            pair.backward = pair.backward.reverse_complement();
         }
 
         Builder {
@@ -236,10 +244,13 @@ impl Builder {
                 }
             }
 
+            let mut region_primer = primer.clone();
+            region_primer.backward = region_primer.backward.reverse_complement();
+
             // Record region
             regions.push(
                 UnindexedRegion {
-                    primer: primer.clone(),
+                    primer: region_primer,
                     unique_pairs,
                     matrix: matrix.to_csr(),
                     unique_kmers: unique,
