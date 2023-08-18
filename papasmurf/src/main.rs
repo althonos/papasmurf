@@ -178,8 +178,8 @@ fn main() {
     // const R2: &str = "Example_L001_R2_001.fastq";
     // const R1: &str = "samples/PO49S4/PO49S4_L001_R1_001.fastq";
     // const R2: &str = "samples/PO49S4/PO49S4_L001_R2_001.fastq";
-    const R1: &str = "samples/MCS7/MCS7_L001_R1_001.fastq";
-    const R2: &str = "samples/MCS7/MCS7_L001_R2_001.fastq";
+    // const R1: &str = "samples/MCS7/MCS7_L001_R1_001.fastq";
+    // const R2: &str = "samples/MCS7/MCS7_L001_R2_001.fastq";
     // const R1: &str = "samples/GFS6/GFS6_L001_R1_001.fastq";
     // const R2: &str = "samples/GFS6/GFS6_L001_R2_001.fastq";
     // const R1: &str = "raw/Q5RES023A1_20230327091114__MC_S7_R1_001.fastq";
@@ -187,99 +187,118 @@ fn main() {
     // const R1: &str = "samples/SPFS5/SPFS5_L001_R1_001.fastq";
     // const R2: &str = "samples/SPFS5/SPFS5_L001_R2_001.fastq";
 
-    println!("Creating mapper");
-    let mut mapper = Mapper::new(&db)
-        .with_kmer_mismatches(10)
-        .with_primer_mismatches(10)
-        .with_partial_hits(true);
-    let mut mapped_reads = std::sync::atomic::AtomicUsize::new(0);
+    for (R1, R2) in [
+        ("samples/GFS6/GFS6_L001_R1_001.fastq", "samples/GFS6/GFS6_L001_R2_001.fastq"),
+        ("samples/H2OS8/H2OS8_L001_R1_001.fastq", "samples/H2OS8/H2OS8_L001_R2_001.fastq"),
+        ("samples/MAP48S1/MAP48S1_L001_R1_001.fastq", "samples/MAP48S1/MAP48S1_L001_R2_001.fastq"),
+        ("samples/MAP49S3/MAP49S3_L001_R1_001.fastq", "samples/MAP49S3/MAP49S3_L001_R2_001.fastq"),
+        ("samples/MCS7/MCS7_L001_R1_001.fastq", "samples/MCS7/MCS7_L001_R2_001.fastq"),
+        ("samples/PO48S2/PO48S2_L001_R1_001.fastq", "samples/PO48S2/PO48S2_L001_R2_001.fastq"),
+        ("samples/PO49S4/PO49S4_L001_R1_001.fastq", "samples/PO49S4/PO49S4_L001_R2_001.fastq"),
+        ("samples/SPFS5/SPFS5_L001_R1_001.fastq", "samples/SPFS5/SPFS5_L001_R2_001.fastq"),
+    ].iter() {
 
-    let size = std::fs::metadata(R1).unwrap().len();
-    let pb = indicatif::ProgressBar::new(size as u64)
-        .with_style(indicatif::ProgressStyle::with_template("[{elapsed_precise}] {bar:40.cyan/blue} {bytes}/{total_bytes} ({binary_bytes_per_sec}) {msg}")
-        .unwrap());
-    let r1_reader = std::fs::File::open(R1)
-        .map(|r| pb.wrap_read(r))
-        // .map(flate2::read::GzDecoder::new)
-        .map(FastqReader::from)
-        .unwrap();
-    let r2_reader = std::fs::File::open(R2)
-        // .map(flate2::read::GzDecoder::new)
-        .map(FastqReader::from)
-        .unwrap();
+        println!("Creating mapper");
+        let mut mapper = Mapper::new(&db)
+            .with_kmer_mismatches(20)
+            .with_primer_mismatches(10)
+            .with_partial_hits(true);
+        let mut mapped_reads = std::sync::atomic::AtomicUsize::new(0);
 
-    // let pli = lightmotif::Pipeline::<lightmotif::Dna, _>::avx2().unwrap();
-    // let mut scores = lightmotif::pli::StripedScores::<lightmotif::num::U32>::empty();
-
-    let reads = r1_reader
-        .zip(r2_reader)
-        .map(Paired::from)
-        .map(|res| res.map(Result::unwrap))
-        .collect::<Vec<_>>();
-    pb.finish_and_clear();
-
-    let pb = indicatif::ProgressBar::new(reads.len() as u64).with_style(
-        indicatif::ProgressStyle::with_template(
-            "[{elapsed_precise}] {bar:40.cyan/blue} {pos} reads/{len} reads ({per_sec}) {msg}",
-        )
-        .unwrap(),
-    );
-    reads
-        .par_iter()
-        .progress_with(pb)
-        .enumerate()
-        .for_each(|(i, read)| {
-            if mapper.add(read.as_ref().map(|r| r.sequence.as_str())) {
-                mapped_reads.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-            }
-        });
-
-    println!(
-        "Processed {} reads",
-        mapper.reads.load(std::sync::atomic::Ordering::Relaxed)
-    );
-    println!(
-        "Mapped {} reads",
-        mapped_reads.load(std::sync::atomic::Ordering::Relaxed)
-    );
-
-    for r in 0..db.regions.len() {
-        println!("[r={}] extracted: {}", r, mapper.expected[r].len());
-    }
-
-    println!("Reconstructing");
-    let result = mapper.finish();
-
-    let reader = std::fs::File::open("../gg_13_5_taxonomy.txt.gz")
-        .map(flate2::read::GzDecoder::new)
-        .map(std::io::BufReader::new)
-        .unwrap();
-    let taxonomy = reader
-        .lines()
-        .map(Result::unwrap)
-        .map(|line| {
-            let (id, lineage) = line.trim_end().split_once('\t').unwrap();
-            (id.into(), lineage.into())
-        })
-        .collect::<HashMap<Rc<str>, Rc<str>>>();
-
-    let mut output = std::fs::File::create("/tmp/GFS6_L001.tsv").unwrap();
-
-    println!("Result:");
-    for j in 0..result.x.len() {
-        let name = &db.names[j];
-        if result.x[j] > 0.0 {
-            writeln!(
-                output,
-                "{}\t{}\t{}",
-                name,
-                &taxonomy[&name.clone()],
-                result.x[j]
-            )
+        let size = std::fs::metadata(R1).unwrap().len();
+        let pb = indicatif::ProgressBar::new(size as u64)
+            .with_style(indicatif::ProgressStyle::with_template("[{elapsed_precise}] {bar:40.cyan/blue} {bytes}/{total_bytes} ({binary_bytes_per_sec}) {msg}")
+            .unwrap());
+        let r1_reader = std::fs::File::open(R1)
+            .map(|r| pb.wrap_read(r))
+            // .map(flate2::read::GzDecoder::new)
+            .map(FastqReader::from)
             .unwrap();
+        let r2_reader = std::fs::File::open(R2)
+            // .map(flate2::read::GzDecoder::new)
+            .map(FastqReader::from)
+            .unwrap();
+
+        // let pli = lightmotif::Pipeline::<lightmotif::Dna, _>::avx2().unwrap();
+        // let mut scores = lightmotif::pli::StripedScores::<lightmotif::num::U32>::empty();
+
+        let reads = r1_reader
+            .zip(r2_reader)
+            .map(Paired::from)
+            .map(|res| res.map(Result::unwrap))
+            .collect::<Vec<_>>();
+        pb.finish_and_clear();
+
+        let pb = indicatif::ProgressBar::new(reads.len() as u64).with_style(
+            indicatif::ProgressStyle::with_template(
+                "[{elapsed_precise}] {bar:40.cyan/blue} {pos} reads/{len} reads ({per_sec}) {msg}",
+            )
+            .unwrap(),
+        );
+        reads
+            .par_iter()
+            .progress_with(pb)
+            .enumerate()
+            .for_each(|(i, read)| {
+                if mapper.add(read.as_ref().map(|r| r.sequence.as_str())) {
+                    mapped_reads.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                }
+            });
+
+        let n_total = mapper.reads.load(std::sync::atomic::Ordering::Relaxed);
+        let n_mapped = mapped_reads.load(std::sync::atomic::Ordering::Relaxed);
+        println!("Processed {} reads", n_total);
+        println!("Mapped {} reads", n_mapped);
+
+        for r in 0..db.regions.len() {
+            println!("[r={}] extracted: {}", r, mapper.expected[r].len());
         }
-        if result.x[j] > 0.005 {
-            println!("[{}] {}: {:?}", name, &taxonomy[&name.clone()], result.x[j]);
+
+        println!("Reconstructing");
+        let mut result = mapper.finish();
+        println!("Refining");
+        for it in 0..10 {
+            result.refine();
         }
+
+        let reader = std::fs::File::open("../gg_13_5_taxonomy.txt.gz")
+            .map(flate2::read::GzDecoder::new)
+            .map(std::io::BufReader::new)
+            .unwrap();
+        let taxonomy = reader
+            .lines()
+            .map(Result::unwrap)
+            .map(|line| {
+                let (id, lineage) = line.trim_end().split_once('\t').unwrap();
+                (id.into(), lineage.into())
+            })
+            .collect::<HashMap<Rc<str>, Rc<str>>>();
+
+        let p = std::path::PathBuf::from(R1);
+        let p2 = p.file_name().unwrap().to_str().unwrap();
+        let mut output = std::fs::File::create(&format!("/tmp/{}.tsv", p2)).unwrap();
+
+        println!("Result:");
+        writeln!(output, "#r1={} r2={} reads={} mapped={}", R1, R2, n_total, n_mapped).unwrap();
+        writeln!(output, "id\ttaxonomy\tselection\tproportion\tmapped").unwrap();
+        for j in 0..result.x.len() {
+            let name = &db.names[j];
+            if result.x[j] > 0.0 {
+                writeln!(
+                    output,
+                    "{}\t{}\t{:.9e}\t{:.9e}\t{}",
+                    name,
+                    &taxonomy[&name.clone()],
+                    result.pi[j],
+                    result.x[j],
+                    result.mapped[j],
+                )
+                .unwrap();
+            }
+            if result.x[j] > 0.005 {
+                println!("[{}] {}: {:?}", name, &taxonomy[&name.clone()], result.x[j]);
+            }
+        }
+
     }
 }

@@ -286,7 +286,7 @@ impl<D: AsRef<Database>> Mapper<D> {
         mapped
     }
 
-    pub fn finish(self) -> MapperResult {
+    pub fn finish(self) -> MapperResult<D> {
         let db = self.db.as_ref();
 
         // Compute the Q_i,j matrix
@@ -298,51 +298,62 @@ impl<D: AsRef<Database>> Mapper<D> {
             q_matrix = q_matrix + q.to_coo();
         }
 
-        // Compute the pi_j vector
-        let mut pi = vec![1.0; q_matrix.columns()];
-        let mut up = vec![0.0; q_matrix.columns()];
-        let mut dens = vec![0.0; q_matrix.rows()];
-        for _it in 0..10 {
-            // println!("iteration {}", it);
-            dens.fill(0.0);
-            for (i, j, x) in q_matrix.non_zero_elements() {
-                dens[i] += x * pi[j];
-            }
-            up.fill(0.0);
-            for (i, j, x) in q_matrix.non_zero_elements() {
-                if dens[i] > 0.0 {
-                    up[j] += *x / dens[i]
-                }
-            }
-            for j in 0..q_matrix.columns() {
-                pi[j] *= up[j] / q_matrix.rows() as f32;
-            }
-        }
-
-        // Compute the X_j matrix
-        let mut xj = vec![0.0; q_matrix.columns()];
-        for j in 0..q_matrix.columns() {
-            if db.amplified[j] > 0 {
-                xj[j] = pi[j] / db.amplified[j] as f32;
-            }
-        }
-        let tot = xj.iter().sum::<f32>();
-        if tot > 0.0 {
-            for j in 0..q_matrix.columns() {
-                xj[j] /= tot;
-            }
+        let mut mapped = vec![0; q_matrix.columns()];
+        for (_, j, _) in q_matrix.non_zero_elements() {
+            mapped[j] += 1;
         }
 
         MapperResult {
+            db: self.db,
+            pi: vec![1.0 / q_matrix.columns() as f32; q_matrix.columns()],
+            x: vec![0.0; q_matrix.columns()],
             q: q_matrix,
-            pi,
-            x: xj,
+            mapped,
         }
     }
 }
 
-pub struct MapperResult {
+pub struct MapperResult<D: AsRef<Database>> {
+    db: D,
     pub q: CooMatrix<f32>,
+    pub mapped: Vec<usize>,
     pub pi: Vec<f32>,
     pub x: Vec<f32>,
+}
+
+impl<D: AsRef<Database>> MapperResult<D> {
+    pub fn refine(&mut self) {
+        let db = self.db.as_ref();
+
+        // Compute the pi_j vector
+        let mut up = vec![0.0; self.q.columns()];
+        let mut dens = vec![0.0; self.q.rows()];
+        dens.fill(0.0);
+        for (i, j, x) in self.q.non_zero_elements() {
+            dens[i] += x * self.pi[j];
+        }
+        up.fill(0.0);
+        for (i, j, x) in self.q.non_zero_elements() {
+            if dens[i] > 0.0 {
+                up[j] += *x / dens[i]
+            }
+        }
+        for j in 0..self.q.columns() {
+            self.pi[j] *= up[j] / self.q.rows() as f32;
+        }
+
+        // Compute the X_j matrix
+        self.x.fill(0.0);
+        for j in 0..self.q.columns() {
+            if db.amplified[j] > 0 {
+                self.x[j] = self.pi[j] / db.amplified[j] as f32;
+            }
+        }
+        let tot = self.x.iter().sum::<f32>();
+        if tot > 0.0 {
+            for j in 0..self.q.columns() {
+                self.x[j] /= tot;
+            }
+        }
+    }
 }
