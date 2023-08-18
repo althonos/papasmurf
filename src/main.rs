@@ -42,6 +42,9 @@ use lightmotif::pli::Maximum;
 use lightmotif::pli::Score;
 use lightmotif::pli::Threshold;
 
+use indicatif::ParallelProgressIterator;
+use rayon::prelude::*;
+
 fn main() {
     let path = std::path::PathBuf::from("/tmp/db.json");
 
@@ -129,9 +132,6 @@ fn main() {
                 }
                 n += 1;
             }
-            if i > 1000000 {
-                break;
-            }
         }
 
         pb.finish_and_clear();
@@ -182,21 +182,21 @@ fn main() {
     // const R2: &str = "Example_L001_R2_001.fastq";
     // const R1: &str = "samples/PO49S4/PO49S4_L001_R1_001.fastq";
     // const R2: &str = "samples/PO49S4/PO49S4_L001_R2_001.fastq";
-    // const R1: &str = "samples/MCS7/MCS7_L001_R1_001.fastq";
-    // const R2: &str = "samples/MCS7/MCS7_L001_R2_001.fastq";
+    const R1: &str = "samples/MCS7/MCS7_L001_R1_001.fastq";
+    const R2: &str = "samples/MCS7/MCS7_L001_R2_001.fastq";
     // const R1: &str = "samples/GFS6/GFS6_L001_R1_001.fastq";
     // const R2: &str = "samples/GFS6/GFS6_L001_R2_001.fastq";
     // const R1: &str = "raw/Q5RES023A1_20230327091114__MC_S7_R1_001.fastq";
     // const R2: &str = "raw/Q5RES023A1_20230327091114__MC_S7_R2_001.fastq";
-    const R1: &str = "samples/SPFS5/SPFS5_L001_R1_001.fastq";
-    const R2: &str = "samples/SPFS5/SPFS5_L001_R2_001.fastq";
+    // const R1: &str = "samples/SPFS5/SPFS5_L001_R1_001.fastq";
+    // const R2: &str = "samples/SPFS5/SPFS5_L001_R2_001.fastq";
 
     println!("Creating mapper");
     let mut mapper = Mapper::new(&db)
         .with_kmer_mismatches(10)
         .with_primer_mismatches(10)
         .with_partial_hits(true);
-    let mut mapped_reads = 0;
+    let mut mapped_reads = std::sync::atomic::AtomicUsize::new(0);
 
     let size = std::fs::metadata(R1).unwrap().len();
     let pb = indicatif::ProgressBar::new(size as u64)
@@ -220,20 +220,32 @@ fn main() {
         .map(Paired::from)
         .map(|res| res.map(Result::unwrap))
         .collect::<Vec<_>>();
-    for (i, read) in reads.iter().enumerate() {
-        if mapper.add(read.as_ref().map(|r| r.sequence.as_str())) {
-            mapped_reads += 1;
-        }
-        if i >= 100 {
-            break;
-        }
-    }
+    pb.finish_and_clear();
+
+    let pb = indicatif::ProgressBar::new(reads.len() as u64).with_style(
+        indicatif::ProgressStyle::with_template(
+            "[{elapsed_precise}] {bar:40.cyan/blue} {pos} reads/{len} reads ({per_sec}) {msg}",
+        )
+        .unwrap(),
+    );
+    reads
+        .par_iter()
+        .progress_with(pb)
+        .enumerate()
+        .for_each(|(i, read)| {
+            if mapper.add(read.as_ref().map(|r| r.sequence.as_str())) {
+                mapped_reads.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            }
+        });
+
     println!(
         "Processed {} reads",
         mapper.reads.load(std::sync::atomic::Ordering::Relaxed)
     );
-    println!("Mapped {} reads", mapped_reads);
-    pb.finish_and_clear();
+    println!(
+        "Mapped {} reads",
+        mapped_reads.load(std::sync::atomic::Ordering::Relaxed)
+    );
 
     for r in 0..db.regions.len() {
         println!("[r={}] extracted: {}", r, mapper.expected[r].len());
@@ -256,7 +268,7 @@ fn main() {
 
     let mut output = std::fs::File::create("/tmp/GFS6_L001.tsv").unwrap();
 
-    println!("Result: ({} reads)", mapped_reads);
+    println!("Result:");
     for j in 0..result.x.len() {
         let name = &db.names[j];
         if result.x[j] > 0.0 {
