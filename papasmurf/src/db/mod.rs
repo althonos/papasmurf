@@ -61,7 +61,7 @@ impl From<UnindexedRegion> for Region {
             unique_kmers: region.unique_kmers,
             matrix: region.matrix,
             // trie,
-            block,
+            block: block.map(Kmers::from),
         }
     }
 }
@@ -86,12 +86,10 @@ pub struct Region {
     pub unique_pairs: OrderedSet<Paired<usize>>,
     /// The set of forward and backward k-mers in this region.
     pub unique_kmers: Paired<OrderedSet<Rc<str>>>,
-
     // /// A pair of tries storing the unique kmers for the forward and backward region.
     // pub trie: Paired<KmerTrie>,
     /// A pair of blocks storing the unique kmers for the forward and backward region.
-    pub block: Paired<DenseMatrix<u8>>,
-
+    pub block: Paired<Kmers>,
     /// A sparse matrix storing the k-mer pair for each database reference.
     pub matrix: CsrMatrix<f32>,
 }

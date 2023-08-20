@@ -1,5 +1,5 @@
-use crate::utils::Rc;
 use crate::errors::Error;
+use crate::utils::Rc;
 
 #[inline]
 pub fn is_ambiguous(c: char) -> Result<bool, Error> {
@@ -73,7 +73,7 @@ pub fn dna_match(c1: char, c2: char) -> bool {
         'V' => c2 == 'A' || c2 == 'C' || c2 == 'G',
 
         'N' => c2 == 'A' || c2 == 'G' || c2 == 'T' || c2 == 'C',
-        
+
         _ => unreachable!(),
     }
 }
