@@ -85,6 +85,10 @@ pub fn mismatches(s1: &str, s2: &str) -> usize {
         .count()
 }
 
+pub fn validate(s: &str) -> Result<(), Error> {
+    count_ambiguous(s).map(|_| ())
+}
+
 pub struct DesambiguationIterator<'a> {
     sequence: &'a str,
     buffer: Rc<String>,

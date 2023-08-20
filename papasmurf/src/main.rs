@@ -68,7 +68,6 @@ fn main() {
             Paired::new("GGAGGAAGGTGGGGATGAC", "AAGGCCCGGGAACGTATT")
                 .map(Primer::new)
                 .map(Result::unwrap),
-
             // Paired::new(
             //     "TGGCGGACGGGTGAGTAA",
             //     &reverse_complement("CTGCTGCCTCCCGTAGGA"),
@@ -188,16 +187,41 @@ fn main() {
     // const R2: &str = "samples/SPFS5/SPFS5_L001_R2_001.fastq";
 
     for (R1, R2) in [
-        ("samples/GFS6/GFS6_L001_R1_001.fastq", "samples/GFS6/GFS6_L001_R2_001.fastq"),
-        ("samples/H2OS8/H2OS8_L001_R1_001.fastq", "samples/H2OS8/H2OS8_L001_R2_001.fastq"),
-        ("samples/MAP48S1/MAP48S1_L001_R1_001.fastq", "samples/MAP48S1/MAP48S1_L001_R2_001.fastq"),
-        ("samples/MAP49S3/MAP49S3_L001_R1_001.fastq", "samples/MAP49S3/MAP49S3_L001_R2_001.fastq"),
-        ("samples/MCS7/MCS7_L001_R1_001.fastq", "samples/MCS7/MCS7_L001_R2_001.fastq"),
-        ("samples/PO48S2/PO48S2_L001_R1_001.fastq", "samples/PO48S2/PO48S2_L001_R2_001.fastq"),
-        ("samples/PO49S4/PO49S4_L001_R1_001.fastq", "samples/PO49S4/PO49S4_L001_R2_001.fastq"),
-        ("samples/SPFS5/SPFS5_L001_R1_001.fastq", "samples/SPFS5/SPFS5_L001_R2_001.fastq"),
-    ].iter() {
-
+        (
+            "samples/GFS6/GFS6_L001_R1_001.fastq",
+            "samples/GFS6/GFS6_L001_R2_001.fastq",
+        ),
+        (
+            "samples/H2OS8/H2OS8_L001_R1_001.fastq",
+            "samples/H2OS8/H2OS8_L001_R2_001.fastq",
+        ),
+        (
+            "samples/MAP48S1/MAP48S1_L001_R1_001.fastq",
+            "samples/MAP48S1/MAP48S1_L001_R2_001.fastq",
+        ),
+        (
+            "samples/MAP49S3/MAP49S3_L001_R1_001.fastq",
+            "samples/MAP49S3/MAP49S3_L001_R2_001.fastq",
+        ),
+        (
+            "samples/MCS7/MCS7_L001_R1_001.fastq",
+            "samples/MCS7/MCS7_L001_R2_001.fastq",
+        ),
+        (
+            "samples/PO48S2/PO48S2_L001_R1_001.fastq",
+            "samples/PO48S2/PO48S2_L001_R2_001.fastq",
+        ),
+        (
+            "samples/PO49S4/PO49S4_L001_R1_001.fastq",
+            "samples/PO49S4/PO49S4_L001_R2_001.fastq",
+        ),
+        (
+            "samples/SPFS5/SPFS5_L001_R1_001.fastq",
+            "samples/SPFS5/SPFS5_L001_R2_001.fastq",
+        ),
+    ]
+    .iter()
+    {
         println!("Creating mapper");
         let mut mapper = Mapper::new(&db)
             .with_kmer_mismatches(20)
@@ -240,7 +264,7 @@ fn main() {
             .progress_with(pb)
             .enumerate()
             .for_each(|(i, read)| {
-                if mapper.add(read.as_ref().map(|r| r.sequence.as_str())) {
+                if mapper.add(read.as_ref().map(|r| r.sequence.as_str())).unwrap() {
                     mapped_reads.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
                 }
             });
@@ -279,7 +303,12 @@ fn main() {
         let mut output = std::fs::File::create(&format!("/tmp/{}.tsv", p2)).unwrap();
 
         println!("Result:");
-        writeln!(output, "#r1={} r2={} reads={} mapped={}", R1, R2, n_total, n_mapped).unwrap();
+        writeln!(
+            output,
+            "#r1={} r2={} reads={} mapped={}",
+            R1, R2, n_total, n_mapped
+        )
+        .unwrap();
         writeln!(output, "id\ttaxonomy\tselection\tproportion\tmapped").unwrap();
         for j in 0..result.x.len() {
             let name = &db.names[j];
@@ -299,6 +328,5 @@ fn main() {
                 println!("[{}] {}: {:?}", name, &taxonomy[&name.clone()], result.x[j]);
             }
         }
-
     }
 }

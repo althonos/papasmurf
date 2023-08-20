@@ -2,6 +2,7 @@ use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 use std::sync::RwLock;
 
+use super::errors::Error;
 use super::db::Database;
 use super::matrix::CooMatrix;
 use super::matrix::DenseMatrix;
@@ -193,7 +194,7 @@ impl<D: AsRef<Database>> Mapper<D> {
         (min_i, min_mm)
     }
 
-    pub fn add(&self, read: Paired<&str>) -> bool {
+    pub fn add(&self, read: Paired<&str>) -> Result<bool, Error> {
         let db = self.db.as_ref();
 
         // Add a new row to the E_i,h matrices
@@ -227,7 +228,7 @@ impl<D: AsRef<Database>> Mapper<D> {
         if primer_mismatches.forward > self.primer_mismatches
             || primer_mismatches.backward > self.primer_mismatches
         {
-            return false;
+            return Ok(false);
         }
 
         // Create the kmer pair
@@ -241,30 +242,20 @@ impl<D: AsRef<Database>> Mapper<D> {
         if kmer.forward.len() > db.k {
             kmer.forward = &kmer.forward[..db.k];
         } else if kmer.forward.len() < db.k && !self.partial_hits {
-            return false;
+            return Ok(false);
         }
         if kmer.backward.len() > db.k {
             kmer.backward = &kmer.backward[..db.k];
         } else if kmer.backward.len() < db.k && !self.partial_hits {
-            return false;
+            return Ok(false);
         }
 
         // Compute mismatches between the read kmer and all the database kmers
-        let mut mismatch = region
-            .block
-            .as_ref()
-            .map(|matrix| vec![0u8; matrix.columns()]);
-        simd_mismatches(
-            kmer.forward.as_bytes(),
-            &region.block.forward,
-            &mut mismatch.forward,
+        let mut mismatch = Paired::new(
+            region.block.forward.mismatches(kmer.forward)?,
+            region.block.backward.mismatches(kmer.backward)?,
         );
-        simd_mismatches(
-            kmer.backward.as_bytes(),
-            &region.block.backward,
-            &mut mismatch.backward,
-        );
-
+        
         // Record the read if it matches any database kmer
         let mut mapped = false;
         for (h, pair) in region.unique_pairs.iter().enumerate() {
@@ -283,7 +274,7 @@ impl<D: AsRef<Database>> Mapper<D> {
             }
         }
 
-        mapped
+        Ok(mapped)
     }
 
     pub fn finish(self) -> MapperResult<D> {

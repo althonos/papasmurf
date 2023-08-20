@@ -6,46 +6,46 @@ use lightmotif::abc::Dna;
 use lightmotif::dense::DenseMatrix;
 use lightmotif::pwm::ScoringMatrix;
 
+use crate::errors::Error;
 use crate::seq::mismatches;
 use crate::seq::reverse_complement;
 use crate::seq::DesambiguationIterator;
-use crate::errors::Error;
 
-fn _minscore(
-    data: &DenseMatrix<f32, <Dna as Alphabet>::K>,
-    startrow: usize,
-    mismatches: usize,
-) -> f32 {
-    if mismatches == 0 {
-        (startrow..data.rows())
-            .map(|i| {
-                *data[i]
-                    .iter()
-                    .filter(|&&x| x > 0.0)
-                    .min_by(|x, y| x.partial_cmp(y).unwrap())
-                    .unwrap()
-            })
-            .sum()
-    } else if startrow == data.rows() - 1 {
-        *data[startrow]
-            .iter()
-            .min_by(|x, y| x.partial_cmp(y).unwrap())
-            .unwrap()
-    } else {
-        let x = *data[startrow]
-            .iter()
-            .filter(|&&x| x > 0.0)
-            .min_by(|x, y| x.partial_cmp(y).unwrap())
-            .unwrap()
-            + _minscore(data, startrow + 1, mismatches);
-        let y = *data[startrow]
-            .iter()
-            .min_by(|x, y| x.partial_cmp(y).unwrap())
-            .unwrap()
-            + _minscore(data, startrow + 1, mismatches - 1);
-        x.min(y)
-    }
-}
+// fn _minscore(
+//     data: &DenseMatrix<f32, <Dna as Alphabet>::K>,
+//     startrow: usize,
+//     mismatches: usize,
+// ) -> f32 {
+//     if mismatches == 0 {
+//         (startrow..data.rows())
+//             .map(|i| {
+//                 *data[i]
+//                     .iter()
+//                     .filter(|&&x| x > 0.0)
+//                     .min_by(|x, y| x.partial_cmp(y).unwrap())
+//                     .unwrap()
+//             })
+//             .sum()
+//     } else if startrow == data.rows() - 1 {
+//         *data[startrow]
+//             .iter()
+//             .min_by(|x, y| x.partial_cmp(y).unwrap())
+//             .unwrap()
+//     } else {
+//         let x = *data[startrow]
+//             .iter()
+//             .filter(|&&x| x > 0.0)
+//             .min_by(|x, y| x.partial_cmp(y).unwrap())
+//             .unwrap()
+//             + _minscore(data, startrow + 1, mismatches);
+//         let y = *data[startrow]
+//             .iter()
+//             .min_by(|x, y| x.partial_cmp(y).unwrap())
+//             .unwrap()
+//             + _minscore(data, startrow + 1, mismatches - 1);
+//         x.min(y)
+//     }
+// }
 
 #[derive(Debug, Clone)]
 pub struct Primer {
@@ -54,13 +54,20 @@ pub struct Primer {
 }
 
 impl Primer {
+    /// Create a new primer from the given template DNA.
+    ///
+    /// # Error
+    /// The constructor will fail if given a template string that does not
+    /// contain extended DNA symbols.
+    ///
     pub fn new<S: Into<String>>(template: S) -> Result<Self, Error> {
         let t = template.into();
-        let encoded = DesambiguationIterator::new(&t)?
-            .map(|s| lightmotif::EncodedSequence::encode(&s)
-                .expect("DesambiguationIterator only produces valid DNA strings"));
+        let encoded = DesambiguationIterator::new(&t)?.map(|s| {
+            lightmotif::EncodedSequence::encode(&s)
+                .expect("DesambiguationIterator only produces valid DNA strings")
+        });
         let pssm = lightmotif::CountMatrix::from_sequences(encoded)
-            .unwrap()
+            .expect("DesambiguationIterator only produces sequences of the same length")
             .to_freq(0.1)
             .to_scoring(None);
         Ok(Self {
@@ -69,6 +76,16 @@ impl Primer {
         })
     }
 
+    /// Return the number of symbols in the primer.
+    ///
+    /// # Example
+    /// ``` rust
+    /// # extern crate papasmurf;
+    /// # use papasmurf::primer::Primer;
+    ///
+    /// let primer = Primer::new("AGGAAGGTGGGGATGACG").unwrap();
+    /// assert_eq!(primer.len(), 18);
+    /// ```
     pub fn len(&self) -> usize {
         self.template.len()
     }
@@ -112,8 +129,8 @@ mod de {
     use super::*;
     use serde::de::Deserializer;
     use serde::de::Error as DeError;
-    use serde::de::Visitor;
     use serde::de::Unexpected;
+    use serde::de::Visitor;
     use serde::Deserialize;
 
     struct PrimerVisitor;
@@ -126,8 +143,7 @@ mod de {
         }
 
         fn visit_str<E: DeError>(self, s: &str) -> Result<Self::Value, E> {
-            Primer::new(s)
-                .map_err(|_| DeError::invalid_value(Unexpected::Str(s), &self))
+            Primer::new(s).map_err(|_| DeError::invalid_value(Unexpected::Str(s), &self))
         }
     }
 
