@@ -1,9 +1,12 @@
 use std::collections::HashSet;
+use std::sync::atomic::AtomicUsize;
+use std::sync::atomic::Ordering;
 
 use lightmotif::pli::Encode;
 use lightmotif::pli::Score;
 use lightmotif::pli::Threshold;
 
+use crate::errors::Error;
 use crate::matrix::DokMatrix;
 use crate::primer::Primer;
 use crate::seq::reverse_complement;
@@ -11,13 +14,12 @@ use crate::utils::Interner;
 use crate::utils::OrderedSet;
 use crate::utils::Paired;
 use crate::utils::Rc;
-use crate::errors::Error;
 
 use super::Database;
 use super::UnindexedRegion;
 
 /// The k-mer sketched from a single sequence.
-/// 
+///
 /// The k-mer are stored as raw strings at this stage, and will be later
 /// deduplicated when the builder is transformed into a fully-indexed database.
 #[derive(Debug, Clone)]
@@ -28,7 +30,7 @@ struct Sketch {
     pub kmer: Paired<Rc<str>>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct Builder {
     /// The size of the k-mers to extract from the reference sequences.
     k: usize,
@@ -40,6 +42,8 @@ pub struct Builder {
     sketches: Vec<Vec<Sketch>>,
     /// A string interner, to avoid re-allocating identitical k-mers.
     interner: Interner<str>,
+    /// The number of references added to the database.
+    references: AtomicUsize,
 }
 
 impl Builder {
@@ -64,7 +68,14 @@ impl Builder {
             interner: Default::default(),
             k: 100,
             primer_mismatches: 2,
+            references: AtomicUsize::new(0),
         }
+    }
+
+    /// Set the number of allowed primer mismatches.
+    pub fn with_primer_mismatches(mut self, primer_mismatches: usize) -> Self {
+        self.primer_mismatches = primer_mismatches;
+        self
     }
 
     /// Add a new reference sequence to the database.
@@ -73,9 +84,9 @@ impl Builder {
     /// sequence.
     ///
     /// # Error
-    /// The method will return an error when `sequence` does not contain valid 
+    /// The method will return an error when `sequence` does not contain valid
     /// DNA symbols (*A*, *T*, *G*, *C* or *N*).
-    /// 
+    ///
     pub fn add<I>(&mut self, id: I, sequence: &str) -> Result<usize, Error>
     where
         I: AsRef<str>,
@@ -154,13 +165,7 @@ impl Builder {
                 bwd_mm
             );
 
-            // // Extract and intern the sequence of the forward primer
-            // let fwd_seq = &sequence[fwd_pos..fwd_pos + primer.forward.len()];
-            // let fwd_rc = self.interner.intern(fwd_seq);
-            // // Extract and intern the sequence of the backward primer
-            // let bwd_seq = &sequence[bwd_pos..sequence.len().min(bwd_pos + primer.backward.len())];
-            // let bwd_rc = self.interner.intern(bwd_seq);
-
+            // Extract and intern the sequence of the forward primer
             if fwd_pos >= bwd_pos {
                 continue;
             }
@@ -186,6 +191,10 @@ impl Builder {
                 kmer: Paired::new(fwd_kmer, bwd_kmer),
                 id: id_rc.get_or_insert_with(|| id.as_ref().into()).clone(),
             });
+        }
+
+        if amplified > 0 {
+            self.references.fetch_add(1, Ordering::Relaxed);
         }
 
         Ok(amplified)
@@ -265,5 +274,17 @@ impl Builder {
             names,
             amplified,
         }
+    }
+}
+
+impl From<Builder> for Database {
+    fn from(builder: Builder) -> Self {
+        builder.to_database()
+    }
+}
+
+impl<'b> From<&'b Builder> for Database {
+    fn from(builder: &'b Builder) -> Self {
+        builder.to_database()
     }
 }
