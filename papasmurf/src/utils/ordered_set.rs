@@ -30,21 +30,33 @@ where
     T: Eq + Hash + Clone + Ord,
 {
     fn from_iter<I: IntoIterator<Item = T>>(iter: I) -> Self {
-        let mut dedup = iter
+        let mut indices = iter
             .into_iter()
             .enumerate()
             .map(|(i, x)| (x, i))
             .collect::<HashMap<_, _>>();
-        let mut keys = dedup.keys().cloned().collect::<Vec<_>>();
-        keys.sort_unstable();
-        for (i, k) in keys.iter().cloned().enumerate() {
-            dedup.insert(k, i);
+        let mut data = indices.keys().cloned().collect::<Vec<_>>();
+        data.sort_unstable();
+        for (i, k) in data.iter().cloned().enumerate() {
+            indices.insert(k, i);
         }
 
-        Self {
-            data: keys,
-            indices: dedup,
+        Self { data, indices }
+    }
+}
+
+impl<T> From<Vec<T>> for OrderedSet<T>
+where
+    T: Eq + Hash + Clone + Ord,
+{
+    fn from(mut data: Vec<T>) -> Self {
+        data.sort_unstable();
+        data.dedup();
+        let mut indices = HashMap::new();
+        for (i, k) in data.iter().cloned().enumerate() {
+            indices.insert(k, i);
         }
+        Self { data, indices }
     }
 }
 
