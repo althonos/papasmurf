@@ -1,8 +1,17 @@
-pub mod db;
-pub mod errors;
+mod matrix;
+mod errors;
+mod mapper;
+mod primer;
+mod utils;
+mod db;
+
 pub mod io;
-pub mod mapper;
-pub mod matrix;
-pub mod primer;
 pub mod seq;
-pub mod utils;
+
+pub use self::db::Builder;
+pub use self::db::Database;
+pub use self::db::Region;
+pub use self::errors::Error;
+pub use self::mapper::Mapper;
+pub use self::primer::Primer;
+pub use self::utils::Paired;

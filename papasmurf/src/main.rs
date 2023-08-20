@@ -12,28 +12,17 @@ use std::ops::Index;
 use std::ops::IndexMut;
 use std::ops::Mul;
 use std::str::FromStr;
+use std::sync::Arc;
 
-use papasmurf::db::Builder;
-use papasmurf::db::Database;
-use papasmurf::db::KmerTrie;
+use papasmurf::Mapper;
+use papasmurf::Primer;
+use papasmurf::Paired;
+use papasmurf::Builder;
+use papasmurf::Database;
 use papasmurf::io::FastaReader;
 use papasmurf::io::FastqReader;
-use papasmurf::mapper::Mapper;
-use papasmurf::matrix::CooMatrix;
-use papasmurf::matrix::CsrMatrix;
-use papasmurf::matrix::DokMatrix;
-use papasmurf::matrix::MatrixDimensions;
-use papasmurf::matrix::NonZeroElements;
-use papasmurf::primer::Primer;
 use papasmurf::seq::count_ambiguous;
-use papasmurf::seq::dna_match;
-use papasmurf::seq::mismatches;
-use papasmurf::seq::reverse_complement;
 use papasmurf::seq::DesambiguationIterator;
-use papasmurf::utils::Interner;
-use papasmurf::utils::OrderedSet;
-use papasmurf::utils::Paired;
-use papasmurf::utils::Rc;
 
 use lightmotif::num::Unsigned;
 use lightmotif::num::U32;
@@ -296,7 +285,7 @@ fn main() {
                 let (id, lineage) = line.trim_end().split_once('\t').unwrap();
                 (id.into(), lineage.into())
             })
-            .collect::<HashMap<Rc<str>, Rc<str>>>();
+            .collect::<HashMap<Arc<str>, Arc<str>>>();
 
         let p = std::path::PathBuf::from(R1);
         let p2 = p.file_name().unwrap().to_str().unwrap();

@@ -1,6 +1,5 @@
 mod builder;
 mod kmers;
-mod kmertrie;
 
 use serde::Deserialize;
 use serde::Serialize;
@@ -15,7 +14,6 @@ use crate::utils::Rc;
 
 pub use self::builder::Builder;
 pub use self::kmers::Kmers;
-pub use self::kmertrie::KmerTrie;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct UnindexedRegion {
@@ -77,6 +75,7 @@ impl From<Region> for UnindexedRegion {
     }
 }
 
+/// A single 16S region from a database, defined by a pair of primers.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(from = "UnindexedRegion", into = "UnindexedRegion")]
 pub struct Region {
@@ -94,6 +93,7 @@ pub struct Region {
     pub matrix: CsrMatrix<f32>,
 }
 
+/// A database storing forward and backward k-mers for each region.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Database {
     /// The size of the k-mers to extract from the reference sequences.

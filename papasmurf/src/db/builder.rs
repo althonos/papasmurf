@@ -30,6 +30,7 @@ struct Sketch {
     pub kmer: Paired<Rc<str>>,
 }
 
+/// A builder for incremental construction of a new database.
 #[derive(Debug)]
 pub struct Builder {
     /// The size of the k-mers to extract from the reference sequences.

@@ -1,3 +1,5 @@
+//! Various formats of sparse and dense matrices.
+
 mod coo;
 mod csc;
 mod csr;
@@ -43,9 +45,3 @@ pub trait Dot<Rhs = Self> {
     fn dot(self, rhs: Rhs) -> Self::Output;
 }
 
-// impl<'mx, T, M: NonZeroElements<T>> NonZeroElements<'mx, T> for &M {
-//     type IntoIter = <M as NonZeroElements<T>>::IntoIter;
-//     fn non_zero_elements(&'mx self) -> Self::IntoIter {
-//         (*self).non_zero_elements()
-//     }
-// }
