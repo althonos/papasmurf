@@ -1,9 +1,9 @@
-mod matrix;
+mod db;
 mod errors;
 mod mapper;
+mod matrix;
 mod primer;
 mod utils;
-mod db;
 
 pub mod io;
 pub mod seq;

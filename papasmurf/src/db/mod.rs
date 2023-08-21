@@ -36,13 +36,6 @@ impl From<UnindexedRegion> for Region {
             .next()
             .map(|kmer| kmer.len())
             .unwrap_or_default();
-        // let mut trie = region.unique_kmers.as_ref().map(|kmers| {
-        //     let mut trie = KmerTrie::new(k);
-        //     for kmer in kmers.iter() {
-        //         trie.insert(kmer);
-        //     }
-        //     trie
-        // });
         let block = region.unique_kmers.as_ref().map(|kmers| {
             let mut block = DenseMatrix::new(k, kmers.len());
             for (j, kmer) in kmers.iter().enumerate() {
@@ -52,13 +45,11 @@ impl From<UnindexedRegion> for Region {
             }
             block
         });
-
         Self {
             primer: region.primer,
             unique_pairs: region.unique_pairs,
             unique_kmers: region.unique_kmers,
             matrix: region.matrix,
-            // trie,
             block: block.map(Kmers::from),
         }
     }

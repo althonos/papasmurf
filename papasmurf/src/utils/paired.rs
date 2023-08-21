@@ -4,32 +4,47 @@ use std::hash::Hash;
 /// A pair of values for paired-end reads.
 #[derive(Debug, Default, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct Paired<T> {
+    /// The value for the forward read.
     pub forward: T,
+    /// The value for the backward read.
     pub backward: T,
 }
 
 impl<T> Paired<T> {
+    /// Create a new pair of values from the given values.
     #[inline]
     pub fn new(forward: T, backward: T) -> Self {
         Self { forward, backward }
     }
 
+    /// Get a reference over the pair of values.
     #[inline]
     pub fn as_ref(&self) -> Paired<&T> {
         Paired::new(&self.forward, &self.backward)
     }
 
+    /// Get a mutable reference over the pair of values.
     #[inline]
     pub fn as_mut(&mut self) -> Paired<&mut T> {
         Paired::new(&mut self.forward, &mut self.backward)
     }
 
+    /// Apply the same function to the forward and the backward values.
     #[inline]
     pub fn map<U, F>(self, f: F) -> Paired<U>
     where
         F: FnOnce(T) -> U + Copy,
     {
         Paired::new(f(self.forward), f(self.backward))
+    }
+
+    /// Apply a function to both the forward and the backward values.
+    #[inline]
+    pub fn merge<U, F>(self, f: F) -> U
+    where
+        F: FnOnce(T, T) -> U,
+    {
+        f(self.forward, self.backward)
     }
 }
 

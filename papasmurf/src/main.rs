@@ -14,15 +14,15 @@ use std::ops::Mul;
 use std::str::FromStr;
 use std::sync::Arc;
 
-use papasmurf::Mapper;
-use papasmurf::Primer;
-use papasmurf::Paired;
-use papasmurf::Builder;
-use papasmurf::Database;
 use papasmurf::io::FastaReader;
 use papasmurf::io::FastqReader;
 use papasmurf::seq::count_ambiguous;
 use papasmurf::seq::DesambiguationIterator;
+use papasmurf::Builder;
+use papasmurf::Database;
+use papasmurf::Mapper;
+use papasmurf::Paired;
+use papasmurf::Primer;
 
 use lightmotif::num::Unsigned;
 use lightmotif::num::U32;
@@ -253,7 +253,10 @@ fn main() {
             .progress_with(pb)
             .enumerate()
             .for_each(|(i, read)| {
-                if mapper.add(read.as_ref().map(|r| r.sequence.as_str())).unwrap() {
+                if mapper
+                    .add(read.as_ref().map(|r| r.sequence.as_str()))
+                    .unwrap()
+                {
                     mapped_reads.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
                 }
             });

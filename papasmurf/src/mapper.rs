@@ -2,8 +2,8 @@ use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 use std::sync::RwLock;
 
-use super::errors::Error;
 use super::db::Database;
+use super::errors::Error;
 use super::matrix::CooMatrix;
 use super::matrix::DenseMatrix;
 use super::matrix::Dot;
@@ -11,70 +11,6 @@ use super::matrix::MatrixDimensions;
 use super::matrix::NonZeroElements;
 use super::primer::Primer;
 use super::utils::Paired;
-
-fn simd_mismatches(query: &[u8], db: &DenseMatrix<u8>, out: &mut [u8]) {
-    use std::arch::x86_64::*;
-    unsafe {
-        let _k = db.rows();
-
-        let mut c = 0;
-
-        let ones = _mm256_set1_epi8(1);
-
-        while c + std::mem::size_of::<__m256i>() * 4 < db.columns() {
-            let mut m1 = _mm256_setzero_si256();
-            let mut m2 = _mm256_setzero_si256();
-            let mut m3 = _mm256_setzero_si256();
-            let mut m4 = _mm256_setzero_si256();
-
-            for i in 0..query.len() {
-                if query[i] != b'N' {
-                    let q = _mm256_set1_epi8(query[i] as i8);
-                    let r1 = _mm256_load_si256(db[i].as_ptr().add(c) as *const _);
-                    let r2 = _mm256_load_si256(db[i].as_ptr().add(c + 32) as *const _);
-                    let r3 = _mm256_load_si256(db[i].as_ptr().add(c + 64) as *const _);
-                    let r4 = _mm256_load_si256(db[i].as_ptr().add(c + 96) as *const _);
-                    m1 = _mm256_add_epi8(m1, _mm256_andnot_si256(_mm256_cmpeq_epi8(q, r1), ones));
-                    m2 = _mm256_add_epi8(m2, _mm256_andnot_si256(_mm256_cmpeq_epi8(q, r2), ones));
-                    m3 = _mm256_add_epi8(m3, _mm256_andnot_si256(_mm256_cmpeq_epi8(q, r3), ones));
-                    m4 = _mm256_add_epi8(m4, _mm256_andnot_si256(_mm256_cmpeq_epi8(q, r4), ones));
-                }
-            }
-
-            _mm256_storeu_si256(out.as_mut_ptr().add(c) as *mut _, m1);
-            _mm256_storeu_si256(out.as_mut_ptr().add(c + 32) as *mut _, m2);
-            _mm256_storeu_si256(out.as_mut_ptr().add(c + 64) as *mut _, m3);
-            _mm256_storeu_si256(out.as_mut_ptr().add(c + 96) as *mut _, m4);
-            c += std::mem::size_of::<__m256i>() * 4;
-        }
-
-        while c + std::mem::size_of::<__m256i>() < db.columns() {
-            let mut m1 = _mm256_setzero_si256();
-
-            for i in 0..query.len() {
-                if query[i] != b'N' {
-                    let q = _mm256_set1_epi8(query[i] as i8);
-                    let r1 = _mm256_load_si256(db[i][c..].as_ptr() as *const _);
-                    m1 = _mm256_add_epi8(m1, _mm256_andnot_si256(_mm256_cmpeq_epi8(q, r1), ones));
-                }
-            }
-
-            _mm256_storeu_si256(out[c..].as_mut_ptr() as *mut _, m1);
-            c += std::mem::size_of::<__m256i>();
-        }
-
-        while c < db.columns() {
-            let mut m = 0;
-            for i in 0..query.len() {
-                if query[i] != b'N' && query[i] != db[i][c] {
-                    m += 1;
-                }
-            }
-            out[c] = m;
-            c += 1;
-        }
-    }
-}
 
 #[derive(Debug)]
 pub struct CooBuilder<T> {
@@ -255,7 +191,7 @@ impl<D: AsRef<Database>> Mapper<D> {
             region.block.forward.mismatches(kmer.forward)?,
             region.block.backward.mismatches(kmer.backward)?,
         );
-        
+
         // Record the read if it matches any database kmer
         let mut mapped = false;
         for (h, pair) in region.unique_pairs.iter().enumerate() {
