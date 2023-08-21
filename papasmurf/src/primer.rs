@@ -81,7 +81,7 @@ impl Primer {
     /// # Example
     /// ``` rust
     /// # extern crate papasmurf;
-    /// # use papasmurf::primer::Primer;
+    /// # use papasmurf::Primer;
     /// let primer = Primer::new("AGGAAGGTGGGGATGACG").unwrap();
     /// assert_eq!(primer.len(), 18);
     /// ```

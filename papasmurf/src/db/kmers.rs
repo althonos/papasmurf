@@ -11,6 +11,37 @@ pub struct Kmers {
 }
 
 impl Kmers {
+    /// Create a new k-mer storage for the given sequences.
+    pub fn new<I>(kmers: I) -> Result<Self, Error>
+    where
+        I: IntoIterator,
+        <I as IntoIterator>::Item: AsRef<str>,
+        <I as IntoIterator>::IntoIter: ExactSizeIterator,
+    {
+        let mut it = kmers.into_iter().peekable();
+        let rows = it.peek().map(|kmer| kmer.as_ref().len()).unwrap_or(0);
+        let cols = it.len();
+        let mut block = DenseMatrix::new(rows, cols);
+
+        for (i, item) in it.enumerate() {
+            if i > cols {
+                return Err(Error::InvalidDimensions);
+            }
+            let seq = item.as_ref();
+            for (j, b) in seq.as_bytes().iter().enumerate() {
+                if j > rows {
+                    return Err(Error::InvalidDimensions);
+                }
+                match *b {
+                    b'A' | b'C' | b'G' | b'T' => block[j][i] = *b,
+                    _ => return Err(Error::InvalidDna),
+                }
+            }
+        }
+
+        Ok(Self::from(block))
+    }
+
     /// Compute the number of mismatches between all k-mers and the query.
     pub fn mismatches(&self, query: &str) -> Result<Vec<u8>, Error> {
         crate::seq::validate(query)?;
@@ -42,7 +73,6 @@ impl Kmers {
             }
             return Ok(out);
         }
-
 
         for c in 0..self.block.columns() {
             let mut m = 0;
@@ -285,5 +315,45 @@ mod de {
         {
             Ok(deserializer.deserialize_seq(KmersVisitor)?)
         }
+    }
+}
+
+#[cfg(test)]
+mod test {
+
+    use super::*;
+
+    #[test]
+    fn test_new() {
+        let kmers = Kmers::new(&["ATTAT", "ATGCA"]).unwrap();
+        assert_eq!(kmers.block.rows(), 5);
+        assert_eq!(kmers.block.columns(), 2);
+        assert_eq!(&kmers.block[0], b"AA");
+        assert_eq!(&kmers.block[1], b"TT");
+        assert_eq!(&kmers.block[2], b"TG");
+        assert_eq!(&kmers.block[3], b"AC");
+        assert_eq!(&kmers.block[4], b"TA");
+    }
+
+    #[test]
+    fn test_mismatches() {
+        let kmers = Kmers::new(&[
+            "AAACA", "AACAC", "AACGG", "AAGCA", "AATCC", "ACAAG", "ACAGG", "ACCCA", "ACTCA",
+            "ACTGC", "AGACG", "AGTAA", "AGTTC", "ATCAC", "ATTAG", "CACAC", "CACAG", "CACTA",
+            "CAGAC", "CATTC", "CCCAT", "CCCTA", "CGTGC", "CTAAT", "CTACT", "CTAGT", "CTCCG",
+            "CTGAA", "CTGGA", "CTTCT", "CTTTC", "GAAGA", "GAATC", "GAGGT", "GGACC", "GGGGA",
+            "GTTCA", "TAGCG", "TCCTA", "TCTCA", "TCTTG", "TGTTA", "TGTTC", "TTAAC", "TTCAA",
+            "TTCAC", "TTCGA", "TTTCT",
+        ])
+        .unwrap();
+
+        let mm = kmers.mismatches("CGTGC").unwrap();
+        assert_eq!( mm[22], 0 );
+
+        let mm = kmers.mismatches("AAGCA").unwrap();
+        assert_eq!( mm[0], 1 );
+        assert_eq!( mm[1], 3 );
+        assert_eq!( mm[2], 3 );
+        assert_eq!( mm[3], 0 );
     }
 }
