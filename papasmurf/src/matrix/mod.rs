@@ -1,13 +1,11 @@
 //! Various formats of sparse and dense matrices.
 
 mod coo;
-mod csc;
 mod csr;
 mod dense;
 mod dok;
 
 pub use self::coo::CooMatrix;
-pub use self::csc::CscMatrix;
 pub use self::csr::CsrMatrix;
 pub use self::dense::DenseMatrix;
 pub use self::dok::DokMatrix;
