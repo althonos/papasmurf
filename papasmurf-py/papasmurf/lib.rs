@@ -19,7 +19,7 @@ use pyo3::AsPyPointer;
 // --- Builder -----------------------------------------------------------------
 
 /// A builder to generate a database of reference k-mers from 16S genes.
-#[pyclass(module = "lightmotif.lib")]
+#[pyclass(module = "papasmurf.lib")]
 #[derive(Debug)]
 pub struct Builder {
     builder: papasmurf::Builder,
@@ -42,12 +42,40 @@ impl Builder {
     /// Create a new database builder with the given parameters.
     #[new]
     pub fn __init__<'py>(primers: &'py PyAny) -> PyResult<PyClassInitializer<Self>> {
-        unimplemented!()
+        let mut p = Vec::new();
+        for result in primers.iter()? {
+            let item = result?;
+            if item.len()? != 2 {
+                return Err(PyValueError::new_err("expected pair of strings"));
+            }
+            let forward = item.get_item(0)?.downcast::<PyString>()?;
+            let backward = item.get_item(1)?.downcast::<PyString>()?;
+            let f = papasmurf::Primer::new(forward.to_str()?).map_err(|e| PyValueError::new_err(e.to_string()))?;
+            let b = papasmurf::Primer::new(backward.to_str()?).map_err(|e| PyValueError::new_err(e.to_string()))?;
+            p.push(papasmurf::Paired::new(f, b))
+        }
+        Ok(Self {
+            builder: papasmurf::Builder::new(p),
+        }.into())
     }
 
     /// Add a new sequence to the builder, extracting k-mer regions.
     pub fn add<'py>(&self, id: &'py PyString, sequence: &'py PyString) -> PyResult<()> {
-        unimplemented!()
+        let id_ = id.to_str()?;
+        let seq_ = sequence.to_str()?;
+
+        let n_ambiguous = match papasmurf::seq::count_ambiguous(seq_) {
+            Ok(n) => n,
+            Err(e) => return Err(PyValueError::new_err(e.to_string())),
+        };
+        if n_ambiguous <= 3 {
+            for dna in papasmurf::seq::DesambiguationIterator::new(seq_).unwrap() {
+                self.builder.add(id_, &dna).unwrap();
+            }
+            // n += 1;
+        }
+
+        Ok(())
     }
 
     /// Build and index the database from the k-mers stored in the builder.
@@ -59,7 +87,7 @@ impl Builder {
 // --- Database ----------------------------------------------------------------
 
 /// A database, storing k-mer regions extracted from reference organisms.
-#[pyclass(module = "lightmotif.lib")]
+#[pyclass(module = "papasmurf.lib")]
 #[derive(Debug)]
 pub struct Database {
     db: Arc<papasmurf::Database>,
@@ -101,7 +129,7 @@ impl Database {
 
 // --- Mapper ------------------------------------------------------------------
 
-#[pyclass(module = "lightmotif.lib")]
+#[pyclass(module = "papasmurf.lib")]
 #[derive(Debug)]
 pub struct Mapper {
     mapper: papasmurf::Mapper<Arc<papasmurf::Database>>,
@@ -118,13 +146,19 @@ impl Mapper {
     }
 
     /// Add a new read to the mapper.
-    pub fn add<'py>(&self, forward: &'py PyString, backward: &'py PyString) -> PyResult<()> {
-        unimplemented!()
+    pub fn add<'py>(&self, forward: &'py PyString, backward: &'py PyString) -> PyResult<bool> {
+        let read = papasmurf::Paired::new(forward.to_str()?, backward.to_str()?);
+        self.mapper
+            .add(read)
+            .map_err(|e| PyValueError::new_err(e.to_string()))
     }
 
     /// Finish mapping and get the mapper results.
+    ///
+    /// The mapper is reset and can be used to map a new sample after calling
+    /// this method.
     pub fn finish(&mut self) {
-        let db = self.mapper.as_ref().clone();
+        let db = AsRef::<Arc<papasmurf::Database>>::as_ref(&self.mapper).clone();
         let mapper = std::mem::replace(&mut self.mapper, papasmurf::Mapper::new(db));
         unreachable!()
     }

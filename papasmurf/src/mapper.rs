@@ -27,6 +27,7 @@ pub struct Mapper<D: AsRef<Database>> {
 }
 
 impl<D: AsRef<Database>> Mapper<D> {
+    /// Create a new mapper for the given database.
     pub fn new(db: D) -> Self {
         let expected = db
             .as_ref()
@@ -44,6 +45,11 @@ impl<D: AsRef<Database>> Mapper<D> {
             partial_hits: false,
             reads: AtomicUsize::new(0),
         }
+    }
+
+    /// Get a reference to the database used by this mapper.
+    pub fn as_database(&self) -> &Database {
+        self.db.as_ref()
     }
 
     pub fn with_primer_mismatches(mut self, primer_mismatches: usize) -> Self {
@@ -215,6 +221,12 @@ impl<D: AsRef<Database>> Mapper<D> {
 impl<D: AsRef<Database>> AsRef<D> for Mapper<D> {
     fn as_ref(&self) -> &D {
         &self.db
+    }
+}
+
+impl<D: AsRef<Database>> AsRef<Database> for Mapper<D> {
+    fn as_ref(&self) -> &Database {
+        self.db.as_ref()
     }
 }
 
