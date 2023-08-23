@@ -11,9 +11,9 @@ use super::NonZeroElements;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DokMatrix<T> {
-    pub(super) data: HashMap<(usize, usize), T>,
-    pub(super) rows: usize,
-    pub(super) cols: usize,
+    data: HashMap<(usize, usize), T>,
+    rows: usize,
+    cols: usize,
 }
 
 impl<T> DokMatrix<T> {
@@ -22,6 +22,16 @@ impl<T> DokMatrix<T> {
             data: Default::default(),
             rows,
             cols,
+        }
+    }
+
+    pub fn with_data(rows: usize, cols: usize, data: HashMap<(usize, usize), T>) -> Self {
+        assert!( data.keys().map(|(i, j)| i).max().map(|&x| x < rows).unwrap_or(true));
+        assert!( data.keys().map(|(i, j)| j).max().map(|&x| x < cols).unwrap_or(true));
+        Self {
+            rows,
+            cols,
+            data,
         }
     }
 

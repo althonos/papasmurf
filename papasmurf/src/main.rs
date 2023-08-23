@@ -267,7 +267,7 @@ fn main() {
         println!("Mapped {} reads", n_mapped);
 
         for r in 0..db.regions.len() {
-            println!("[r={}] extracted: {}", r, mapper.expected[r].len());
+            println!("[r={}] extracted: {}", r, mapper.expected[r].read().unwrap().len());
         }
 
         println!("Reconstructing");
@@ -292,7 +292,9 @@ fn main() {
 
         let p = std::path::PathBuf::from(R1);
         let p2 = p.file_name().unwrap().to_str().unwrap();
-        let mut output = std::fs::File::create(&format!("/tmp/{}.tsv", p2)).unwrap();
+        let mut output = std::fs::File::create(&format!("/tmp/{}.tsv", p2))
+            .map(std::io::BufWriter::new)
+            .unwrap();
 
         println!("Result:");
         writeln!(

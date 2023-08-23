@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 use std::sync::RwLock;
@@ -5,6 +6,7 @@ use std::sync::RwLock;
 use super::db::Database;
 use super::errors::Error;
 use super::matrix::CooMatrix;
+use super::matrix::DokMatrix;
 use super::matrix::DenseMatrix;
 use super::matrix::Dot;
 use super::matrix::MatrixDimensions;
@@ -13,46 +15,9 @@ use super::primer::Primer;
 use super::utils::Paired;
 
 #[derive(Debug)]
-pub struct CooBuilder<T> {
-    data: RwLock<Vec<(usize, usize, T)>>,
-}
-
-impl<T> CooBuilder<T> {
-    pub fn new() -> Self {
-        Self {
-            data: RwLock::new(Vec::new()),
-        }
-    }
-
-    pub fn insert(&self, i: usize, j: usize, x: T) {
-        let mut w = self.data.write().expect("lock was poisoned");
-        w.push((i, j, x));
-    }
-
-    pub fn len(&self) -> usize {
-        let r = self.data.read().expect("lock was poisoned");
-        r.len()
-    }
-}
-
-impl<T: Clone> CooBuilder<T> {
-    pub fn to_coo_with_dimensions(&self, rows: usize, cols: usize) -> CooMatrix<T> {
-        let mut w = self.data.write().expect("lock was poisoned");
-        w.sort_by_key(|&(i, j, _)| (i, j));
-
-        let mut coo = CooMatrix::new(rows, cols);
-        for (i, j, x) in w.iter() {
-            coo.insert(*i, *j, x.clone());
-        }
-
-        coo
-    }
-}
-
-#[derive(Debug)]
 pub struct Mapper<D: AsRef<Database>> {
     pub db: D,
-    pub expected: Vec<CooBuilder<f32>>,
+    pub expected: Vec<RwLock<HashMap<(usize, usize), f32>>>,
     primer_mismatches: usize,
     kmer_mismatches: usize,
     error_probability: f32,
@@ -67,7 +32,7 @@ impl<D: AsRef<Database>> Mapper<D> {
             .as_ref()
             .regions
             .iter()
-            .map(|_| CooBuilder::new())
+            .map(|_| RwLock::from(HashMap::new()))
             .collect();
         Self {
             expected,
@@ -204,7 +169,7 @@ impl<D: AsRef<Database>> Mapper<D> {
                 let e = (self.error_probability / 3.0).powf(ne as f32)
                     * (1.0 - self.error_probability).powf((l - ne) as f32);
                 if e > 0.0 {
-                    self.expected[r].insert(i, h, e);
+                    self.expected[r].write().expect("lock was poisoned").insert((i, h), e);
                     mapped = true;
                 }
             }
@@ -215,12 +180,12 @@ impl<D: AsRef<Database>> Mapper<D> {
 
     pub fn finish(self) -> MapperResult<D> {
         let db = self.db.as_ref();
+        let reads = self.reads.load(Ordering::Relaxed);
 
         // Compute the Q_i,j matrix
-        let mut q_matrix =
-            CooMatrix::<f32>::new(self.reads.load(Ordering::Relaxed), db.names.len());
+        let mut q_matrix = CooMatrix::<f32>::new(reads, db.names.len());
         for (region, expected) in db.regions.iter().zip(self.expected) {
-            let e = expected.to_coo_with_dimensions(q_matrix.rows(), region.unique_pairs.len());
+            let mut e = DokMatrix::with_data(reads, region.unique_pairs.len(), expected.into_inner().unwrap());
             let q = e.to_csr().dot(&region.matrix);
             q_matrix = q_matrix + q.to_coo();
         }
