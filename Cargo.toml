@@ -1,2 +1,3 @@
 [workspace]
-members = ["papasmurf"]
+members = ["papasmurf", "papasmurf-py"]
+resolver = "2"

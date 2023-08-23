@@ -1,0 +1,26 @@
+[package]
+name = "papasmurf-py"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+path = "papasmurf/lib.rs"
+
+[dependencies.papasmurf]
+version = "0.1.0"
+path = "../papasmurf"
+[dependencies.pyo3]
+version = "0.19.2"
+features = ["macros"]
+
+[features]
+default = []
+built = []
+extension-module = ["pyo3/extension-module"]
+nightly = ["pyo3/nightly"]
+
+[[test]]
+name = "unittest"
+path = "papasmurf/tests/unittest.rs"
+harness = false
