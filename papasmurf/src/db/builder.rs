@@ -1,4 +1,5 @@
 use std::collections::HashSet;
+use std::sync::RwLock;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 
@@ -40,7 +41,7 @@ pub struct Builder {
     /// The list of primers used to identify the 16S regions.
     primers: Vec<Paired<Primer>>,
     /// The list of sketches extracted so far, grouped by region.
-    sketches: Vec<Vec<Sketch>>,
+    sketches: Vec<RwLock<Vec<Sketch>>>,
     /// A string interner, to avoid re-allocating identitical k-mers.
     interner: Interner<str>,
     /// The number of references added to the database.
@@ -55,7 +56,7 @@ impl Builder {
         // Store sketches independently for each region.
         let mut sketches = Vec::with_capacity(primers.len());
         for _ in 0..primers.len() {
-            sketches.push(Vec::new());
+            sketches.push(RwLock::new(Vec::new()));
         }
 
         // Reverse-complement the backward primer.
@@ -88,7 +89,7 @@ impl Builder {
     /// The method will return an error when `sequence` does not contain valid
     /// DNA symbols (*A*, *T*, *G*, *C* or *N*).
     ///
-    pub fn add<I>(&mut self, id: I, sequence: &str) -> Result<usize, Error>
+    pub fn add<I>(&self, id: I, sequence: &str) -> Result<usize, Error>
     where
         I: AsRef<str>,
     {
@@ -187,7 +188,7 @@ impl Builder {
 
             // Add the amplified k-mer to the current region.
             amplified += 1;
-            self.sketches[region].push(Sketch {
+            self.sketches[region].write().expect("lock was poisoned").push(Sketch {
                 // primer: Paired::new(fwd_rc, bwd_rc),
                 kmer: Paired::new(fwd_kmer, bwd_kmer),
                 id: id_rc.get_or_insert_with(|| id.as_ref().into()).clone(),
@@ -203,9 +204,11 @@ impl Builder {
 
     /// Build the final database.
     pub fn to_database(&self) -> Database {
+
+        let sketches_ref = self.sketches.iter().map(|s| s.read().expect("lock was poisoned")).collect::<Vec<_>>();
+
         // Extract the unique names of all the references stored so far.
-        let names = self
-            .sketches
+        let names = sketches_ref
             .iter()
             .flat_map(|entries| entries.iter().map(|kmer| &kmer.id))
             .cloned()
@@ -213,13 +216,13 @@ impl Builder {
 
         // Count how many regions were amplified for each reference.
         let mut amplified = vec![0; names.len()];
-        for kmer in self.sketches.iter().map(|v| v.iter()).flatten() {
+        for kmer in sketches_ref.iter().map(|v| v.iter()).flatten() {
             amplified[names[&kmer.id]] += 1;
         }
 
         // Group kmers for individual regions
         let mut regions = Vec::with_capacity(self.primers.len());
-        for (primer, sketches) in self.primers.iter().zip(self.sketches.iter()) {
+        for (primer, sketches) in self.primers.iter().zip(sketches_ref.iter()) {
             // Extract unique kmers
             let unique = sketches
                 .iter()

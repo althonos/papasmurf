@@ -41,7 +41,7 @@ fn main() {
         // --- FILL DATABASE
 
         // Create a new database builder from the given primers
-        let mut builder = Builder::new(vec![
+        let builder = Builder::new(vec![
             Paired::new("TGGCGAACGGGTGAGTAA", "CCGTGTCTCAGTCCCARTG")
                 .map(Primer::new)
                 .map(Result::unwrap),
