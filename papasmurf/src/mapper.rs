@@ -6,8 +6,8 @@ use std::sync::RwLock;
 use super::db::Database;
 use super::errors::Error;
 use super::matrix::CooMatrix;
-use super::matrix::DokMatrix;
 use super::matrix::DenseMatrix;
+use super::matrix::DokMatrix;
 use super::matrix::Dot;
 use super::matrix::MatrixDimensions;
 use super::matrix::NonZeroElements;
@@ -169,7 +169,10 @@ impl<D: AsRef<Database>> Mapper<D> {
                 let e = (self.error_probability / 3.0).powf(ne as f32)
                     * (1.0 - self.error_probability).powf((l - ne) as f32);
                 if e > 0.0 {
-                    self.expected[r].write().expect("lock was poisoned").insert((i, h), e);
+                    self.expected[r]
+                        .write()
+                        .expect("lock was poisoned")
+                        .insert((i, h), e);
                     mapped = true;
                 }
             }
@@ -185,7 +188,11 @@ impl<D: AsRef<Database>> Mapper<D> {
         // Compute the Q_i,j matrix
         let mut q_matrix = CooMatrix::<f32>::new(reads, db.names.len());
         for (region, expected) in db.regions.iter().zip(self.expected) {
-            let mut e = DokMatrix::with_data(reads, region.unique_pairs.len(), expected.into_inner().unwrap());
+            let mut e = DokMatrix::with_data(
+                reads,
+                region.unique_pairs.len(),
+                expected.into_inner().unwrap(),
+            );
             let q = e.to_csr().dot(&region.matrix);
             q_matrix = q_matrix + q.to_coo();
         }
@@ -202,6 +209,12 @@ impl<D: AsRef<Database>> Mapper<D> {
             q: q_matrix,
             mapped,
         }
+    }
+}
+
+impl<D: AsRef<Database>> AsRef<D> for Mapper<D> {
+    fn as_ref(&self) -> &D {
+        &self.db
     }
 }
 

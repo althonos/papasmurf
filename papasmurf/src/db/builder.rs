@@ -1,7 +1,7 @@
 use std::collections::HashSet;
-use std::sync::RwLock;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
+use std::sync::RwLock;
 
 use lightmotif::pli::Encode;
 use lightmotif::pli::Score;
@@ -188,11 +188,14 @@ impl Builder {
 
             // Add the amplified k-mer to the current region.
             amplified += 1;
-            self.sketches[region].write().expect("lock was poisoned").push(Sketch {
-                // primer: Paired::new(fwd_rc, bwd_rc),
-                kmer: Paired::new(fwd_kmer, bwd_kmer),
-                id: id_rc.get_or_insert_with(|| id.as_ref().into()).clone(),
-            });
+            self.sketches[region]
+                .write()
+                .expect("lock was poisoned")
+                .push(Sketch {
+                    // primer: Paired::new(fwd_rc, bwd_rc),
+                    kmer: Paired::new(fwd_kmer, bwd_kmer),
+                    id: id_rc.get_or_insert_with(|| id.as_ref().into()).clone(),
+                });
         }
 
         if amplified > 0 {
@@ -204,8 +207,11 @@ impl Builder {
 
     /// Build the final database.
     pub fn to_database(&self) -> Database {
-
-        let sketches_ref = self.sketches.iter().map(|s| s.read().expect("lock was poisoned")).collect::<Vec<_>>();
+        let sketches_ref = self
+            .sketches
+            .iter()
+            .map(|s| s.read().expect("lock was poisoned"))
+            .collect::<Vec<_>>();
 
         // Extract the unique names of all the references stored so far.
         let names = sketches_ref

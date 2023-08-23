@@ -267,7 +267,11 @@ fn main() {
         println!("Mapped {} reads", n_mapped);
 
         for r in 0..db.regions.len() {
-            println!("[r={}] extracted: {}", r, mapper.expected[r].read().unwrap().len());
+            println!(
+                "[r={}] extracted: {}",
+                r,
+                mapper.expected[r].read().unwrap().len()
+            );
         }
 
         println!("Reconstructing");

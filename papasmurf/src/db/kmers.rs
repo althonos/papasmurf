@@ -348,12 +348,12 @@ mod test {
         .unwrap();
 
         let mm = kmers.mismatches("CGTGC").unwrap();
-        assert_eq!( mm[22], 0 );
+        assert_eq!(mm[22], 0);
 
         let mm = kmers.mismatches("AAGCA").unwrap();
-        assert_eq!( mm[0], 1 );
-        assert_eq!( mm[1], 3 );
-        assert_eq!( mm[2], 3 );
-        assert_eq!( mm[3], 0 );
+        assert_eq!(mm[0], 1);
+        assert_eq!(mm[1], 3);
+        assert_eq!(mm[2], 3);
+        assert_eq!(mm[3], 0);
     }
 }
