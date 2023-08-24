@@ -88,7 +88,8 @@ impl From<papasmurf::Database> for Database {
 impl Database {
     /// Load a database serialized at the given path.
     #[staticmethod]
-    pub fn load<'py>(filename: &'py PyString) -> PyResult<Self> {
+    #[pyo3(signature = (filename, format = "messagepack"))]
+    pub fn load<'py>(filename: &'py PyString, format: &str) -> PyResult<Self> {
         let name = filename.to_str()?;
         let f = match std::fs::File::open(name) {
             Ok(file) => std::io::BufReader::new(file),
@@ -100,16 +101,24 @@ impl Database {
                 }
             }
         };
-        match serde_json::from_reader::<_, papasmurf::Database>(f) {
-            Ok(database) => Ok(Database::from(database)),
-            Err(e) => return Err(PyValueError::new_err(e.to_string())),
+        match format {
+            "json" => match serde_json::from_reader::<_, papasmurf::Database>(f) {
+                Ok(database) => Ok(Database::from(database)),
+                Err(e) => Err(PyRuntimeError::new_err(e.to_string())),
+            },
+            "messagepack" => match rmp_serde::from_read::<_, papasmurf::Database>(f) {
+                Ok(database) => Ok(Database::from(database)),
+                Err(e) => Err(PyRuntimeError::new_err(e.to_string())),
+            }
+            _ => Err(PyValueError::new_err(format!("invalid format: {:?}", format))),
         }
     }
 
     /// Store the database to the given path.
-    pub fn dump<'py>(&self, filename: &'py PyString) -> PyResult<()> {
+    #[pyo3(signature = (filename, format = "messagepack"))]
+    pub fn dump<'py>(&self, filename: &'py PyString, format: &str) -> PyResult<()> {
         let name = filename.to_str()?;
-        let f = match std::fs::File::create(name) {
+        let mut f = match std::fs::File::create(name) {
             Ok(file) => std::io::BufWriter::new(file),
             Err(e) => {
                 if let Some(n) = e.raw_os_error() {
@@ -119,19 +128,26 @@ impl Database {
                 }
             }
         };
-        if let Err(e) = serde_json::to_writer(f, self.db.as_ref()) {
-            if e.is_io() {
-                let err: std::io::Error = e.into();
-                if let Some(n) = err.raw_os_error() {
-                    Err(PyOSError::new_err((n, name.to_string())))
+        match format {
+            "json" => if let Err(e) = serde_json::to_writer(f, self.db.as_ref()) {
+                if e.is_io() {
+                    let err: std::io::Error = e.into();
+                    if let Some(n) = err.raw_os_error() {
+                        Err(PyOSError::new_err((n, name.to_string())))
+                    } else {
+                        Err(PyRuntimeError::new_err(err.to_string()))
+                    }
                 } else {
-                    Err(PyRuntimeError::new_err(err.to_string()))
+                    Err(PyValueError::new_err(e.to_string()))
                 }
             } else {
-                Err(PyValueError::new_err(e.to_string()))
+                Ok(())
+            },
+            "messagepack" => match rmp_serde::encode::write(&mut f, self.db.as_ref()) {
+                Ok(_) => Ok(()),
+                Err(e) => Err(PyRuntimeError::new_err(e.to_string())),
             }
-        } else {
-            Ok(())
+            _ => Err(PyValueError::new_err(format!("invalid format: {:?}", format))),
         }
     }
 }
