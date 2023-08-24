@@ -1,15 +1,13 @@
 use std::fmt::Formatter;
 use std::fmt::Result as FmtResult;
 
-
 use lightmotif::abc::Dna;
-
 use lightmotif::pwm::ScoringMatrix;
 
 use crate::errors::Error;
 use crate::seq::mismatches;
 use crate::seq::reverse_complement;
-use crate::seq::DesambiguationIterator;
+use crate::seq::DisambiguationIterator;
 
 // fn _minscore(
 //     data: &DenseMatrix<f32, <Dna as Alphabet>::K>,
@@ -62,9 +60,9 @@ impl Primer {
     ///
     pub fn new<S: Into<String>>(template: S) -> Result<Self, Error> {
         let t = template.into();
-        let encoded = DesambiguationIterator::new(&t)?.map(|s| {
+        let encoded = DisambiguationIterator::new(&t)?.map(|s| {
             lightmotif::EncodedSequence::encode(&s)
-                .expect("DesambiguationIterator only produces valid DNA strings")
+                .expect("DisambiguationIterator only produces valid DNA strings")
         });
         let pssm = lightmotif::CountMatrix::from_sequences(encoded)
             .expect("DesambiguationIterator only produces sequences of the same length")

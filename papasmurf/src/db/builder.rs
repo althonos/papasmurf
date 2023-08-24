@@ -10,7 +10,9 @@ use lightmotif::pli::Threshold;
 use crate::errors::Error;
 use crate::matrix::DokMatrix;
 use crate::primer::Primer;
+use crate::seq::count_ambiguous;
 use crate::seq::reverse_complement;
+use crate::seq::DisambiguationIterator;
 use crate::utils::Interner;
 use crate::utils::OrderedSet;
 use crate::utils::Paired;
@@ -83,13 +85,29 @@ impl Builder {
     /// Add a new reference sequence to the database.
     ///
     /// Returns the number of region k-mers successfully extracted from the
-    /// sequence.
+    /// sequence. If the sequence contains ambiguous IUPAC DNA symbols, then
+    /// the combination of all possible sequences is generated and used to
+    /// extract k-mers, up to 3 ambiguous positions.
     ///
     /// # Error
     /// The method will return an error when `sequence` does not contain valid
-    /// DNA symbols (*A*, *T*, *G*, *C* or *N*).
+    /// IUPAC DNA symbols.
     ///
     pub fn add<I>(&self, id: I, sequence: &str) -> Result<usize, Error>
+    where
+        I: AsRef<str>,
+    {
+        let mut n = 0;
+        if count_ambiguous(&sequence)? <= 3 {
+            for dna in DisambiguationIterator::new(&sequence).unwrap() {
+                n += self.add_unambiguous(&id, &dna)?;
+            }
+        }
+        Ok(n)
+    }
+
+    // Add a single unambiguous sequence to the builder.
+    fn add_unambiguous<I>(&self, id: I, sequence: &str) -> Result<usize, Error>
     where
         I: AsRef<str>,
     {

@@ -89,7 +89,7 @@ pub fn validate(s: &str) -> Result<(), Error> {
     count_ambiguous(s).map(|_| ())
 }
 
-pub struct DesambiguationIterator<'a> {
+pub struct DisambiguationIterator<'a> {
     sequence: &'a str,
     buffer: Rc<String>,
     pos: Vec<usize>,
@@ -98,7 +98,7 @@ pub struct DesambiguationIterator<'a> {
     remaining: usize,
 }
 
-impl<'a> DesambiguationIterator<'a> {
+impl<'a> DisambiguationIterator<'a> {
     pub fn new(sequence: &'a str) -> Result<Self, Error> {
         let buffer = Rc::new(String::new());
         let mut pos = Vec::new();
@@ -132,7 +132,7 @@ impl<'a> DesambiguationIterator<'a> {
             state.push(var.len() - 1);
         }
 
-        Ok(DesambiguationIterator {
+        Ok(DisambiguationIterator {
             buffer,
             pos,
             state,
@@ -143,7 +143,7 @@ impl<'a> DesambiguationIterator<'a> {
     }
 }
 
-impl<'a> Iterator for DesambiguationIterator<'a> {
+impl<'a> Iterator for DisambiguationIterator<'a> {
     type Item = Rc<String>;
     fn next(&mut self) -> Option<Self::Item> {
         if self.remaining == 0 {
@@ -184,7 +184,7 @@ impl<'a> Iterator for DesambiguationIterator<'a> {
 }
 
 pub fn disambiguate<'a>(s: &'a str) -> Result<Vec<String>, Error> {
-    Ok(DesambiguationIterator::new(s)?
+    Ok(DisambiguationIterator::new(s)?
         .map(|s| s.clone().as_ref().to_owned())
         .collect())
 }

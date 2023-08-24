@@ -1,20 +1,10 @@
-
 use std::sync::Arc;
-
-
-
-
 
 use pyo3::exceptions::PyOSError;
 use pyo3::exceptions::PyRuntimeError;
-
 use pyo3::exceptions::PyValueError;
-
 use pyo3::prelude::*;
-
-
 use pyo3::types::PyString;
-
 
 // --- Builder -----------------------------------------------------------------
 
@@ -50,32 +40,26 @@ impl Builder {
             }
             let forward = item.get_item(0)?.downcast::<PyString>()?;
             let backward = item.get_item(1)?.downcast::<PyString>()?;
-            let f = papasmurf::Primer::new(forward.to_str()?).map_err(|e| PyValueError::new_err(e.to_string()))?;
-            let b = papasmurf::Primer::new(backward.to_str()?).map_err(|e| PyValueError::new_err(e.to_string()))?;
+            let f = papasmurf::Primer::new(forward.to_str()?)
+                .map_err(|e| PyValueError::new_err(e.to_string()))?;
+            let b = papasmurf::Primer::new(backward.to_str()?)
+                .map_err(|e| PyValueError::new_err(e.to_string()))?;
             p.push(papasmurf::Paired::new(f, b))
         }
         Ok(Self {
             builder: papasmurf::Builder::new(p),
-        }.into())
+        }
+        .into())
     }
 
     /// Add a new sequence to the builder, extracting k-mer regions.
     pub fn add<'py>(&self, id: &'py PyString, sequence: &'py PyString) -> PyResult<()> {
         let id_ = id.to_str()?;
         let seq_ = sequence.to_str()?;
-
-        let n_ambiguous = match papasmurf::seq::count_ambiguous(seq_) {
-            Ok(n) => n,
-            Err(e) => return Err(PyValueError::new_err(e.to_string())),
-        };
-        if n_ambiguous <= 3 {
-            for dna in papasmurf::seq::DesambiguationIterator::new(seq_).unwrap() {
-                self.builder.add(id_, &dna).unwrap();
-            }
-            // n += 1;
+        match self.builder.add(id_, seq_) {
+            Ok(_) => Ok(()),
+            Err(e) => Err(PyValueError::new_err(e.to_string())),
         }
-
-        Ok(())
     }
 
     /// Build and index the database from the k-mers stored in the builder.

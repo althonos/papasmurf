@@ -1,4 +1,3 @@
-
 use std::iter::FusedIterator;
 use std::ops::Add;
 use std::ops::AddAssign;
