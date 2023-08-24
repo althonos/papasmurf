@@ -5,6 +5,7 @@ from .lib import (
     Builder,
     Database,
     Mapper,
+    MapperResult,
 )
 
 __author__ = lib.__author__

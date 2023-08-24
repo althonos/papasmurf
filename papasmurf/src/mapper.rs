@@ -230,6 +230,7 @@ impl<D: AsRef<Database>> AsRef<Database> for Mapper<D> {
     }
 }
 
+#[derive(Debug, Clone)]
 pub struct MapperResult<D: AsRef<Database>> {
     db: D,
     pub q: CooMatrix<f32>,

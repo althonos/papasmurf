@@ -156,9 +156,9 @@ impl Mapper {
 
     /// Add a new read to the mapper.
     pub fn add<'py>(&self, forward: &'py PyString, backward: &'py PyString) -> PyResult<bool> {
+        let py = forward.py();
         let read = papasmurf::Paired::new(forward.to_str()?, backward.to_str()?);
-        self.mapper
-            .add(read)
+        py.allow_threads(|| self.mapper.add(read))
             .map_err(|e| PyValueError::new_err(e.to_string()))
     }
 
@@ -166,10 +166,27 @@ impl Mapper {
     ///
     /// The mapper is reset and can be used to map a new sample after calling
     /// this method.
-    pub fn finish(&mut self) {
+    pub fn finish(&mut self) -> PyResult<MapperResult> {
         let db = AsRef::<Arc<papasmurf::Database>>::as_ref(&self.mapper).clone();
-        let _mapper = std::mem::replace(&mut self.mapper, papasmurf::Mapper::new(db));
-        unimplemented!()
+        let mapper = std::mem::replace(&mut self.mapper, papasmurf::Mapper::new(db));
+        let result = mapper.finish();
+        Ok(MapperResult { result })
+    }
+}
+
+// --- MapperResult ------------------------------------------------------------
+
+#[pyclass(module = "papasmurf.lib")]
+#[derive(Debug)]
+pub struct MapperResult {
+    result: papasmurf::MapperResult<Arc<papasmurf::Database>>,
+}
+
+#[pymethods]
+impl MapperResult {
+    pub fn refine(&mut self) -> PyResult<()> {
+        self.result.refine();
+        Ok(())
     }
 }
 
@@ -184,6 +201,7 @@ pub fn init(_py: Python, m: &PyModule) -> PyResult<()> {
     m.add_class::<Database>()?;
     m.add_class::<Builder>()?;
     m.add_class::<Mapper>()?;
+    m.add_class::<MapperResult>()?;
 
     Ok(())
 }

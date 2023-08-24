@@ -13,5 +13,6 @@ pub use self::db::Database;
 pub use self::db::Region;
 pub use self::errors::Error;
 pub use self::mapper::Mapper;
+pub use self::mapper::MapperResult;
 pub use self::primer::Primer;
 pub use self::utils::Paired;
