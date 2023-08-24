@@ -43,6 +43,7 @@ impl Kmers {
     }
 
     /// Compute the number of mismatches between all k-mers and the query.
+    #[allow(unreachable_code)]
     pub fn mismatches(&self, query: &str) -> Result<Vec<u8>, Error> {
         crate::seq::validate(query)?;
 
@@ -82,7 +83,6 @@ impl Kmers {
                 }
             }
             out[c] = m;
-            c += 1;
         }
         Ok(out)
     }

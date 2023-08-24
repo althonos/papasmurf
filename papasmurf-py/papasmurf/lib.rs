@@ -1,20 +1,20 @@
-use std::io::ErrorKind;
+
 use std::sync::Arc;
 
-use pyo3::exceptions::PyBufferError;
-use pyo3::exceptions::PyFileNotFoundError;
-use pyo3::exceptions::PyIndexError;
-use pyo3::exceptions::PyIsADirectoryError;
+
+
+
+
 use pyo3::exceptions::PyOSError;
 use pyo3::exceptions::PyRuntimeError;
-use pyo3::exceptions::PyTypeError;
+
 use pyo3::exceptions::PyValueError;
-use pyo3::ffi::Py_ssize_t;
+
 use pyo3::prelude::*;
-use pyo3::types::PyDict;
-use pyo3::types::PyList;
+
+
 use pyo3::types::PyString;
-use pyo3::AsPyPointer;
+
 
 // --- Builder -----------------------------------------------------------------
 
@@ -184,7 +184,7 @@ impl Mapper {
     /// this method.
     pub fn finish(&mut self) {
         let db = AsRef::<Arc<papasmurf::Database>>::as_ref(&self.mapper).clone();
-        let mapper = std::mem::replace(&mut self.mapper, papasmurf::Mapper::new(db));
+        let _mapper = std::mem::replace(&mut self.mapper, papasmurf::Mapper::new(db));
         unimplemented!()
     }
 }

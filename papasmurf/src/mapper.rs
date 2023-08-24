@@ -6,7 +6,7 @@ use std::sync::RwLock;
 use super::db::Database;
 use super::errors::Error;
 use super::matrix::CooMatrix;
-use super::matrix::DenseMatrix;
+
 use super::matrix::DokMatrix;
 use super::matrix::Dot;
 use super::matrix::MatrixDimensions;
@@ -158,7 +158,7 @@ impl<D: AsRef<Database>> Mapper<D> {
         }
 
         // Compute mismatches between the read kmer and all the database kmers
-        let mut mismatch = Paired::new(
+        let mismatch = Paired::new(
             region.block.forward.mismatches(kmer.forward)?,
             region.block.backward.mismatches(kmer.backward)?,
         );
@@ -194,7 +194,7 @@ impl<D: AsRef<Database>> Mapper<D> {
         // Compute the Q_i,j matrix
         let mut q_matrix = CooMatrix::<f32>::new(reads, db.names.len());
         for (region, expected) in db.regions.iter().zip(self.expected) {
-            let mut e = DokMatrix::with_data(
+            let e = DokMatrix::with_data(
                 reads,
                 region.unique_pairs.len(),
                 expected.into_inner().unwrap(),

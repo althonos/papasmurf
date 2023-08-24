@@ -28,13 +28,13 @@ impl<T> DokMatrix<T> {
     pub fn with_data(rows: usize, cols: usize, data: HashMap<(usize, usize), T>) -> Self {
         assert!(data
             .keys()
-            .map(|(i, j)| i)
+            .map(|(i, _j)| i)
             .max()
             .map(|&x| x < rows)
             .unwrap_or(true));
         assert!(data
             .keys()
-            .map(|(i, j)| j)
+            .map(|(_i, j)| j)
             .max()
             .map(|&x| x < cols)
             .unwrap_or(true));

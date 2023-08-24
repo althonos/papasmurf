@@ -1,9 +1,9 @@
 use std::fmt::Formatter;
 use std::fmt::Result as FmtResult;
 
-use lightmotif::abc::Alphabet;
+
 use lightmotif::abc::Dna;
-use lightmotif::dense::DenseMatrix;
+
 use lightmotif::pwm::ScoringMatrix;
 
 use crate::errors::Error;
