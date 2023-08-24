@@ -25,7 +25,7 @@ use super::UnindexedRegion;
 ///
 /// The k-mer are stored as raw strings at this stage, and will be later
 /// deduplicated when the builder is transformed into a fully-indexed database.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 struct Sketch {
     /// The idenfitier of the reference this sketch originates from.
     pub id: Rc<str>,
@@ -43,7 +43,7 @@ pub struct Builder {
     /// The list of primers used to identify the 16S regions.
     primers: Vec<Paired<Primer>>,
     /// The list of sketches extracted so far, grouped by region.
-    sketches: Vec<RwLock<Vec<Sketch>>>,
+    sketches: Vec<RwLock<HashSet<Sketch>>>,
     /// A string interner, to avoid re-allocating identitical k-mers.
     interner: Interner<str>,
     /// The number of references added to the database.
@@ -58,7 +58,7 @@ impl Builder {
         // Store sketches independently for each region.
         let mut sketches = Vec::with_capacity(primers.len());
         for _ in 0..primers.len() {
-            sketches.push(RwLock::new(Vec::new()));
+            sketches.push(RwLock::new(HashSet::new()));
         }
 
         // Reverse-complement the backward primer.
@@ -205,15 +205,17 @@ impl Builder {
                 .intern(&reverse_complement(&sequence[bwd_pos - self.k..bwd_pos])?);
 
             // Add the amplified k-mer to the current region.
-            amplified += 1;
-            self.sketches[region]
+            if self.sketches[region]
                 .write()
                 .expect("lock was poisoned")
-                .push(Sketch {
+                .insert(Sketch {
                     // primer: Paired::new(fwd_rc, bwd_rc),
                     kmer: Paired::new(fwd_kmer, bwd_kmer),
                     id: id_rc.get_or_insert_with(|| id.as_ref().into()).clone(),
-                });
+                })
+            {
+                amplified += 1;
+            }
         }
 
         if amplified > 0 {

@@ -106,16 +106,7 @@ fn main() {
         let mut n = 0;
         for (i, read) in reader.map(Result::unwrap).enumerate() {
             let seq = read.sequence.replace('U', "T");
-            let n_ambiguous = count_ambiguous(&seq).unwrap();
-            if n_ambiguous == 0 {
-                builder.add(&read.id, &seq);
-                n += 1;
-            } else if n_ambiguous <= 3 {
-                for dna in DesambiguationIterator::new(&seq).unwrap() {
-                    builder.add(&read.id, &dna);
-                }
-                n += 1;
-            }
+            n += builder.add(&read.id, &seq).unwrap();
         }
 
         pb.finish_and_clear();
