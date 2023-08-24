@@ -1,10 +1,13 @@
 use std::sync::Arc;
 
-use pyo3::exceptions::PyOSError;
 use pyo3::exceptions::PyRuntimeError;
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 use pyo3::types::PyString;
+
+mod error;
+
+use self::error::Error;
 
 // --- Builder -----------------------------------------------------------------
 
@@ -41,9 +44,9 @@ impl Builder {
             let forward = item.get_item(0)?.downcast::<PyString>()?;
             let backward = item.get_item(1)?.downcast::<PyString>()?;
             let f = papasmurf::Primer::new(forward.to_str()?)
-                .map_err(|e| PyValueError::new_err(e.to_string()))?;
+                .map_err(Error::from)?;
             let b = papasmurf::Primer::new(backward.to_str()?)
-                .map_err(|e| PyValueError::new_err(e.to_string()))?;
+                .map_err(Error::from)?;
             p.push(papasmurf::Paired::new(f, b))
         }
         Ok(Self {
@@ -58,7 +61,7 @@ impl Builder {
         let seq_ = sequence.to_str()?;
         match self.builder.add(id_, seq_) {
             Ok(_) => Ok(()),
-            Err(e) => Err(PyValueError::new_err(e.to_string())),
+            Err(e) => Err(Error::from(e).into()),
         }
     }
 
@@ -91,20 +94,13 @@ impl Database {
     #[pyo3(signature = (filename, format = "messagepack"))]
     pub fn load<'py>(filename: &'py PyString, format: &str) -> PyResult<Self> {
         let name = filename.to_str()?;
-        let f = match std::fs::File::open(name) {
-            Ok(file) => std::io::BufReader::new(file),
-            Err(e) => {
-                if let Some(n) = e.raw_os_error() {
-                    return Err(PyOSError::new_err((n, name.to_string())));
-                } else {
-                    return Err(PyRuntimeError::new_err(e.to_string()));
-                }
-            }
-        };
+        let f = std::fs::File::open(name)
+            .map(std::io::BufReader::new)
+            .map_err(|e| Error::Io(e, name.to_string()))?;
         match format {
             "json" => match serde_json::from_reader::<_, papasmurf::Database>(f) {
-                Ok(database) => Ok(Database::from(database)),
-                Err(e) => Err(PyRuntimeError::new_err(e.to_string())),
+                Ok(db) => Ok(Database::from(db)),
+                Err(e) => Err(Error::from(e).into()),
             },
             "messagepack" => match rmp_serde::from_read::<_, papasmurf::Database>(f) {
                 Ok(database) => Ok(Database::from(database)),
@@ -120,28 +116,12 @@ impl Database {
         let name = filename.to_str()?;
         let mut f = match std::fs::File::create(name) {
             Ok(file) => std::io::BufWriter::new(file),
-            Err(e) => {
-                if let Some(n) = e.raw_os_error() {
-                    return Err(PyOSError::new_err((n, name.to_string())));
-                } else {
-                    return Err(PyRuntimeError::new_err(e.to_string()));
-                }
-            }
+            Err(e) => return Err(Error::Io(e, name.to_string()).into()),
         };
         match format {
-            "json" => if let Err(e) = serde_json::to_writer(f, self.db.as_ref()) {
-                if e.is_io() {
-                    let err: std::io::Error = e.into();
-                    if let Some(n) = err.raw_os_error() {
-                        Err(PyOSError::new_err((n, name.to_string())))
-                    } else {
-                        Err(PyRuntimeError::new_err(err.to_string()))
-                    }
-                } else {
-                    Err(PyValueError::new_err(e.to_string()))
-                }
-            } else {
-                Ok(())
+            "json" => match serde_json::to_writer(f, self.db.as_ref()) {
+                Ok(_) => Ok(()),
+                Err(e) => Err(Error::from(e).into()),
             },
             "messagepack" => match rmp_serde::encode::write(&mut f, self.db.as_ref()) {
                 Ok(_) => Ok(()),
@@ -175,7 +155,7 @@ impl Mapper {
         let py = forward.py();
         let read = papasmurf::Paired::new(forward.to_str()?, backward.to_str()?);
         py.allow_threads(|| self.mapper.add(read))
-            .map_err(|e| PyValueError::new_err(e.to_string()))
+            .map_err(|e| Error::from(e).into())
     }
 
     /// Finish mapping and get the mapper results.
