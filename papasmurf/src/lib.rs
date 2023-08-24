@@ -4,9 +4,10 @@ mod mapper;
 mod matrix;
 mod primer;
 mod utils;
+mod seq;
 
+#[doc(hidden)]
 pub mod io;
-pub mod seq;
 
 pub use self::db::Builder;
 pub use self::db::Database;

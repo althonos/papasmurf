@@ -16,8 +16,6 @@ use std::sync::Arc;
 
 use papasmurf::io::FastaReader;
 use papasmurf::io::FastqReader;
-use papasmurf::seq::count_ambiguous;
-use papasmurf::seq::DisambiguationIterator;
 use papasmurf::Builder;
 use papasmurf::Database;
 use papasmurf::Mapper;
