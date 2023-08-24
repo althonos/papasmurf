@@ -80,7 +80,8 @@ impl Builder {
 
     /// Build and index the database from the k-mers stored in the builder.
     pub fn to_database(&self) -> PyResult<Database> {
-        unimplemented!()
+        let db = Arc::new(self.builder.to_database());
+        Ok(Database { db })
     }
 }
 
@@ -123,7 +124,31 @@ impl Database {
 
     /// Store the database to the given path.
     pub fn dump<'py>(&self, filename: &'py PyString) -> PyResult<()> {
-        unimplemented!()
+        let name = filename.to_str()?;
+        let f = match std::fs::File::create(name) {
+            Ok(file) => std::io::BufWriter::new(file),
+            Err(e) => {
+                if let Some(n) = e.raw_os_error() {
+                    return Err(PyOSError::new_err((n, name.to_string())));
+                } else {
+                    return Err(PyRuntimeError::new_err(e.to_string()));
+                }
+            }
+        };
+        if let Err(e) = serde_json::to_writer(f, self.db.as_ref()) {
+            if e.is_io() {
+                let err: std::io::Error = e.into();
+                if let Some(n) = err.raw_os_error() {
+                    Err(PyOSError::new_err((n, name.to_string())))
+                } else {
+                    Err(PyRuntimeError::new_err(err.to_string()))
+                }
+            } else {
+                Err(PyValueError::new_err(e.to_string()))
+            }
+        } else {
+            Ok(())
+        }
     }
 }
 
@@ -160,7 +185,7 @@ impl Mapper {
     pub fn finish(&mut self) {
         let db = AsRef::<Arc<papasmurf::Database>>::as_ref(&self.mapper).clone();
         let mapper = std::mem::replace(&mut self.mapper, papasmurf::Mapper::new(db));
-        unreachable!()
+        unimplemented!()
     }
 }
 
@@ -174,6 +199,7 @@ pub fn init(_py: Python, m: &PyModule) -> PyResult<()> {
 
     m.add_class::<Database>()?;
     m.add_class::<Builder>()?;
+    m.add_class::<Mapper>()?;
 
     Ok(())
 }
