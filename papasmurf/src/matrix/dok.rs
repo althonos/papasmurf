@@ -9,6 +9,7 @@ use super::csr::CsrMatrix;
 use super::MatrixDimensions;
 use super::NonZeroElements;
 
+/// A sparse matrix in dictionary-of-keys format.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DokMatrix<T> {
     data: HashMap<(usize, usize), T>,

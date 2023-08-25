@@ -11,6 +11,7 @@ use super::Dot;
 use super::MatrixDimensions;
 use super::NonZeroElements;
 
+/// A sparse matrix in compressed sparse row format.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CsrMatrix<T> {
     pub(super) cols: usize,

@@ -10,6 +10,7 @@ use super::csr::CsrMatrix;
 use super::MatrixDimensions;
 use super::NonZeroElements;
 
+/// A sparse matrix in coordinate format.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CooMatrix<T> {
     pub(super) rows: usize,

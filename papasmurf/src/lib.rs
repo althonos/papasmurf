@@ -1,12 +1,11 @@
 mod db;
 mod errors;
-mod matrix;
 mod primer;
 mod seq;
 mod utils;
 
-#[doc(hidden)]
 pub mod io;
+pub mod matrix;
 
 pub use self::db::Builder;
 pub use self::db::Database;
