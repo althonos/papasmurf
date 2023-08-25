@@ -8,6 +8,8 @@ use typenum::U32;
 
 use super::MatrixDimensions;
 
+// --- DenseMatrix -------------------------------------------------------------
+
 /// A dense matrix backed by aligned memory.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DenseMatrix<T: Default + Copy, A: Unsigned = U32> {

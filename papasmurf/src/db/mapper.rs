@@ -223,7 +223,7 @@ impl<D: AsRef<Database>> Mapper<D> {
                 expected.into_inner().unwrap(),
             );
             let q = e.to_csr().dot(&region.matrix);
-            q_matrix = q_matrix + q.to_coo();
+            q_matrix = q_matrix + q.into_coo();
         }
 
         MapperResult {

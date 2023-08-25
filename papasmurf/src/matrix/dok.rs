@@ -9,7 +9,9 @@ use super::csr::CsrMatrix;
 use super::MatrixDimensions;
 use super::NonZeroElements;
 
-/// A sparse matrix in dictionary-of-keys format.
+// --- DokMatrix ---------------------------------------------------------------
+
+/// A sparse matrix in dictionary-of-keys (DOK) format.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DokMatrix<T> {
     data: HashMap<(usize, usize), T>,
@@ -126,6 +128,8 @@ impl<T> MatrixDimensions for DokMatrix<T> {
         self.cols
     }
 }
+
+// --- NonZeroIter -------------------------------------------------------------
 
 pub struct NonZeroIter<'m, T> {
     it: std::collections::hash_map::Iter<'m, (usize, usize), T>,

@@ -11,7 +11,9 @@ use super::Dot;
 use super::MatrixDimensions;
 use super::NonZeroElements;
 
-/// A sparse matrix in compressed sparse row format.
+// --- CsrMatrix ---------------------------------------------------------------
+
+/// A sparse matrix in compressed sparse row (CSR) format.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CsrMatrix<T> {
     pub(super) cols: usize,
@@ -21,6 +23,7 @@ pub struct CsrMatrix<T> {
 }
 
 impl<T> CsrMatrix<T> {
+    /// Create a new CSR matrix with the given dimensions.
     pub fn new(rows: usize, cols: usize) -> Self {
         CsrMatrix {
             cols,
@@ -29,9 +32,38 @@ impl<T> CsrMatrix<T> {
             row_index: vec![0; rows + 1],
         }
     }
+
+    /// Reserve space for the given number of non-zero elements.
+    pub fn reserve(&mut self, nnz: usize) {
+        self.data.reserve(nnz);
+        self.col_index.reserve(nnz);
+    }
+
+    /// Convert the matrix into COO format without cloning data.
+    pub fn into_coo(self) -> CooMatrix<T> {
+        let mut coo = CooMatrix::new(self.rows(), self.columns());
+        coo.reserve(self.nnz());
+
+        let mut ptr = 0;
+        let mut row = 0;
+        let mut it = self.data.into_iter();
+
+        while let Some(x) = it.next() {
+            while ptr >= self.row_index[row + 1] {
+                row += 1;
+            }
+            ptr += 1;
+            coo.i.push(row);
+            coo.j.push(self.col_index[ptr - 1]);
+            coo.data.push(x);
+        }
+
+        coo
+    }
 }
 
 impl<T: Clone> CsrMatrix<T> {
+    /// Build a COO matrix by cloning data.
     pub fn to_coo(&self) -> CooMatrix<T> {
         let mut coo = CooMatrix::new(self.rows(), self.columns());
         for (i, j, x) in self.non_zero_elements() {
@@ -196,6 +228,20 @@ impl<T> MatrixDimensions for CsrMatrix<T> {
     }
 }
 
+impl<T: Clone> From<&CsrMatrix<T>> for CooMatrix<T> {
+    fn from(csr: &CsrMatrix<T>) -> CooMatrix<T> {
+        csr.to_coo()
+    }
+}
+
+impl<T> From<CsrMatrix<T>> for CooMatrix<T> {
+    fn from(csr: CsrMatrix<T>) -> CooMatrix<T> {
+        csr.into_coo()
+    }
+}
+
+// --- NonZeroIter -------------------------------------------------------------
+
 pub struct NonZeroIter<'m, T> {
     matrix: &'m CsrMatrix<T>,
     row: usize,
@@ -248,6 +294,21 @@ mod test {
     use super::super::dok::DokMatrix;
     use super::super::Dot;
     use super::*;
+
+    #[test]
+    fn into_coo() {
+        let mut a = DokMatrix::<u8>::new(2, 2);
+        a.insert(0, 0, 1);
+        a.insert(0, 1, 2);
+        a.insert(1, 0, 3);
+
+        let c = a.to_csr().into_coo();
+        let mut it = c.iter();
+        assert_eq!(it.next(), Some((0, 0, &1)));
+        assert_eq!(it.next(), Some((0, 1, &2)));
+        assert_eq!(it.next(), Some((1, 0, &3)));
+        assert_eq!(it.next(), None);
+    }
 
     #[test]
     fn csr_csr_dot() {

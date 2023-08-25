@@ -10,7 +10,9 @@ use super::csr::CsrMatrix;
 use super::MatrixDimensions;
 use super::NonZeroElements;
 
-/// A sparse matrix in coordinate format.
+// --- CooMatrix ---------------------------------------------------------------
+
+/// A sparse matrix in coordinate (COO) format.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CooMatrix<T> {
     pub(super) rows: usize,
@@ -21,6 +23,7 @@ pub struct CooMatrix<T> {
 }
 
 impl<T> CooMatrix<T> {
+    /// Create a new COO matrix with the given dimensions.
     pub fn new(rows: usize, cols: usize) -> Self {
         Self {
             rows,
@@ -31,7 +34,36 @@ impl<T> CooMatrix<T> {
         }
     }
 
-    pub fn insert(&mut self, i: usize, j: usize, data: T) {
+    /// Reserve space for the given number of non-zero elements.
+    pub fn reserve(&mut self, nnz: usize) {
+        self.i.reserve(nnz);
+        self.j.reserve(nnz);
+        self.data.reserve(nnz);
+    }
+
+    /// Convert the matrix into CSR format without cloning data.
+    pub fn into_csr(self) -> CsrMatrix<T> {
+        let mut csr = CsrMatrix::new(self.rows, self.cols);
+        let mut it = self.i.into_iter().zip(self.j).zip(self.data).peekable();
+
+        for i in 0..self.rows {
+            csr.row_index[i] = csr.col_index.len();
+            while let Some(((x, _), _)) = it.peek() {
+                if *x != i {
+                    break;
+                }
+                let ((_, y), z) = it.next().unwrap();
+                csr.col_index.push(y);
+                csr.data.push(z);
+            }
+        }
+
+        csr.row_index[self.rows] = csr.col_index.len();
+        csr
+    }
+
+    /// Insert a new non-zero element at the end of the matrix.
+    pub(super) fn insert(&mut self, i: usize, j: usize, data: T) {
         assert!(i < self.rows);
         assert!(j < self.cols);
 
@@ -50,29 +82,13 @@ impl<T> CooMatrix<T> {
         self.j.push(j);
         self.data.push(data);
     }
-
-    pub fn iter(&self) -> impl Iterator<Item = (usize, usize, &T)> {
-        self.i
-            .iter()
-            .zip(self.j.iter())
-            .zip(self.data.iter())
-            .map(|((i, j), x)| (*i, *j, x))
-    }
-
-    pub fn grow(&mut self, rows: usize, cols: usize) {
-        self.rows += rows;
-        self.cols += cols;
-    }
 }
 
 impl<T: Clone> CooMatrix<T> {
+    /// Build a CSR matrix by cloning data.
     pub fn to_csr(&self) -> CsrMatrix<T> {
         let mut csr = CsrMatrix::new(self.rows, self.cols);
-
-        // let mut indices = self.data.keys().collect::<Vec<_>>();
-        // indices.sort_unstable();
-
-        let mut it = self.iter().peekable();
+        let mut it = self.non_zero_elements().peekable();
 
         for i in 0..self.rows {
             csr.row_index[i] = csr.col_index.len();
@@ -80,7 +96,7 @@ impl<T: Clone> CooMatrix<T> {
                 if *x != i {
                     break;
                 }
-                let (_x, y, z) = it.next().unwrap();
+                let (_, y, z) = it.next().unwrap();
                 csr.col_index.push(y);
                 csr.data.push(z.clone());
             }
@@ -103,11 +119,13 @@ impl<T> MatrixDimensions for CooMatrix<T> {
     }
 }
 
-impl<T: Add<Output = T> + Clone> Add for CooMatrix<T> {
+impl<T: Add<Output = T> + Clone + Default + PartialEq> Add for CooMatrix<T> {
     type Output = CooMatrix<T>;
     fn add(self, rhs: Self) -> Self {
         assert_eq!(self.rows, rhs.rows);
         assert_eq!(self.cols, rhs.cols);
+
+        let zero = T::default();
 
         let mut out = Self::new(self.rows, rhs.cols);
         let mut x = 0;
@@ -130,8 +148,10 @@ impl<T: Add<Output = T> + Clone> Add for CooMatrix<T> {
                     y += 1;
                 }
                 Ordering::Equal => {
-                    // FIXME: May be zero
-                    out.insert(i1, j1, d1.clone() + d2.clone());
+                    let d = d1.clone() + d2.clone();
+                    if d != zero {
+                        out.insert(i1, j1, d1.clone() + d2.clone());
+                    }
                     x += 1;
                     y += 1;
                 }
@@ -154,6 +174,20 @@ impl<T: Add<Output = T> + Clone> Add for CooMatrix<T> {
         out
     }
 }
+
+impl<T: Clone> From<&CooMatrix<T>> for CsrMatrix<T> {
+    fn from(coo: &CooMatrix<T>) -> CsrMatrix<T> {
+        coo.to_csr()
+    }
+}
+
+impl<T> From<CooMatrix<T>> for CsrMatrix<T> {
+    fn from(coo: CooMatrix<T>) -> CsrMatrix<T> {
+        coo.into_csr()
+    }
+}
+
+// --- NonZeroIter -------------------------------------------------------------
 
 pub struct NonZeroIter<'m, T> {
     matrix: &'m CooMatrix<T>,

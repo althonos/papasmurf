@@ -6,6 +6,8 @@ use serde::Serialize;
 use super::MatrixDimensions;
 use super::NonZeroElements;
 
+// --- CscMatrix ---------------------------------------------------------------
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CscMatrix<T> {
     pub(super) rows: usize,
@@ -47,6 +49,8 @@ impl<T> MatrixDimensions for CscMatrix<T> {
         self.col_index.len() - 1
     }
 }
+
+// --- NonZeroIter -------------------------------------------------------------
 
 pub struct NonZeroIter<'m, T> {
     matrix: &'m CscMatrix<T>,
