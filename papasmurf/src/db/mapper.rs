@@ -247,9 +247,9 @@ impl<D: AsRef<Database>> AsRef<Database> for Mapper<D> {
 }
 
 /// The results of a database mapping.
-/// 
-/// Once all reads have been mapped against the database k-mers, the final 
-/// `Q` probability matrix is computed by aggregating all regions. 
+///
+/// Once all reads have been mapped against the database k-mers, the final
+/// `Q` probability matrix is computed by aggregating all regions.
 #[derive(Debug, Clone)]
 pub struct MapperResult<D: AsRef<Database>> {
     db: D,

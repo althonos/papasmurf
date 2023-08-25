@@ -7,6 +7,7 @@ use serde::Serialize;
 
 use crate::matrix::CsrMatrix;
 use crate::matrix::DenseMatrix;
+use crate::matrix::MatrixDimensions;
 use crate::primer::Primer;
 use crate::utils::OrderedSet;
 use crate::utils::Paired;
@@ -50,7 +51,6 @@ impl From<UnindexedRegion> for Region {
         Self {
             primer: region.primer,
             unique_pairs: region.unique_pairs,
-            unique_kmers: region.unique_kmers,
             matrix: region.matrix,
             block: block.map(Kmers::from),
         }
@@ -59,10 +59,22 @@ impl From<UnindexedRegion> for Region {
 
 impl From<Region> for UnindexedRegion {
     fn from(region: Region) -> Self {
+        let unique_kmers = region.block.map(|kmers| {
+            let mut unique_kmers = Vec::with_capacity(kmers.columns());
+            let mut s = String::with_capacity(kmers.rows());
+            for j in 0..kmers.columns() {
+                s.clear();
+                for i in 0..kmers.rows() {
+                    s.push(kmers[i][j] as char);
+                }
+                unique_kmers.push(Rc::from(s.as_str()));
+            }
+            unique_kmers.into()
+        });
         Self {
             primer: region.primer,
             unique_pairs: region.unique_pairs,
-            unique_kmers: region.unique_kmers,
+            unique_kmers,
             matrix: region.matrix,
         }
     }
@@ -76,8 +88,6 @@ pub struct Region {
     primer: Paired<Primer>,
     /// The set of unique k-mer pairs in this region.
     unique_pairs: OrderedSet<Paired<usize>>,
-    /// The set of forward and backward k-mers in this region.
-    unique_kmers: Paired<OrderedSet<Rc<str>>>,
     /// A pair of blocks storing the unique kmers for the forward and backward region.
     block: Paired<Kmers>,
     /// A sparse matrix storing the k-mer pair for each database reference.

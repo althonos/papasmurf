@@ -88,6 +88,16 @@ impl Kmers {
     }
 }
 
+impl MatrixDimensions for Kmers {
+    fn rows(&self) -> usize {
+        self.block.rows()
+    }
+
+    fn columns(&self) -> usize {
+        self.block.columns()
+    }
+}
+
 impl From<DenseMatrix<u8>> for Kmers {
     fn from(block: DenseMatrix<u8>) -> Self {
         Kmers { block }
