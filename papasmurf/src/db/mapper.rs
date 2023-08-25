@@ -3,16 +3,15 @@ use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 use std::sync::RwLock;
 
-use super::db::Database;
-use super::errors::Error;
-use super::matrix::CooMatrix;
-
-use super::matrix::DokMatrix;
-use super::matrix::Dot;
-use super::matrix::MatrixDimensions;
-use super::matrix::NonZeroElements;
-use super::primer::Primer;
-use super::utils::Paired;
+use crate::db::Database;
+use crate::errors::Error;
+use crate::matrix::CooMatrix;
+use crate::matrix::DokMatrix;
+use crate::matrix::Dot;
+use crate::matrix::MatrixDimensions;
+use crate::matrix::NonZeroElements;
+use crate::primer::Primer;
+use crate::utils::Paired;
 
 /// A helper for mapping 16S reads from a sample to a k-mer database.
 #[derive(Debug)]
@@ -101,11 +100,11 @@ impl<D: AsRef<Database>> Mapper<D> {
             let mm = if i < 0 {
                 let q = &primer.template()[(-i) as usize..];
                 let t = &sequence[..(primer.len() as isize + i) as usize];
-                super::seq::mismatches(q, t) + (-i) as usize
+                crate::seq::mismatches(q, t) + (-i) as usize
             } else {
                 let q = &primer.template();
                 let t = &sequence[i as usize..(i + primer.len() as isize) as usize];
-                super::seq::mismatches(q, t)
+                crate::seq::mismatches(q, t)
             };
             if mm == 0 {
                 return (i, mm);

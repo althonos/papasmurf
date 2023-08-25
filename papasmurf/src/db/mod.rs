@@ -1,5 +1,6 @@
 mod builder;
 mod kmers;
+mod mapper;
 
 use serde::Deserialize;
 use serde::Serialize;
@@ -7,13 +8,14 @@ use serde::Serialize;
 use crate::matrix::CsrMatrix;
 use crate::matrix::DenseMatrix;
 use crate::primer::Primer;
-
 use crate::utils::OrderedSet;
 use crate::utils::Paired;
 use crate::utils::Rc;
 
 pub use self::builder::Builder;
 pub use self::kmers::Kmers;
+pub use self::mapper::Mapper;
+pub use self::mapper::MapperResult;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct UnindexedRegion {
