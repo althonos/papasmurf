@@ -297,22 +297,23 @@ fn main() {
         )
         .unwrap();
         writeln!(output, "id\ttaxonomy\tselection\tproportion\tmapped").unwrap();
-        for j in 0..result.x.len() {
+        let mapped = result.mapped();
+        for (j, &freq) in result.frequencies().iter().enumerate() {
             let name = &db.names[j];
-            if result.x[j] > 0.0 {
+            if freq > 0.0 {
                 writeln!(
                     output,
                     "{}\t{}\t{:.9e}\t{:.9e}\t{}",
                     name,
                     &taxonomy[&name.clone()],
-                    result.pi[j],
-                    result.x[j],
-                    result.mapped[j],
+                    result.proportions()[j],
+                    freq,
+                    mapped[j],
                 )
                 .unwrap();
             }
-            if result.x[j] > 0.005 {
-                println!("[{}] {}: {:?}", name, &taxonomy[&name.clone()], result.x[j]);
+            if freq > 0.005 {
+                println!("[{}] {}: {:?}", name, &taxonomy[&name.clone()], freq);
             }
         }
     }

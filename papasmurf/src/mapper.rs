@@ -227,17 +227,10 @@ impl<D: AsRef<Database>> Mapper<D> {
             q_matrix = q_matrix + q.to_coo();
         }
 
-        let mut mapped = vec![0; q_matrix.columns()];
-        for (_, j, _) in q_matrix.non_zero_elements() {
-            mapped[j] += 1;
-        }
-
         MapperResult {
             db: self.db,
             pi: vec![1.0 / q_matrix.columns() as f32; q_matrix.columns()],
-            x: vec![0.0; q_matrix.columns()],
             q: q_matrix,
-            mapped,
         }
     }
 }
@@ -254,20 +247,68 @@ impl<D: AsRef<Database>> AsRef<Database> for Mapper<D> {
     }
 }
 
+/// The results of a database mapping.
+/// 
+/// Once all reads have been mapped against the database k-mers, the final 
+/// `Q` probability matrix is computed by aggregating all regions. 
 #[derive(Debug, Clone)]
 pub struct MapperResult<D: AsRef<Database>> {
     db: D,
-    pub q: CooMatrix<f32>,
-    pub mapped: Vec<usize>,
-    pub pi: Vec<f32>,
-    pub x: Vec<f32>,
+    q: CooMatrix<f32>,
+    pi: Vec<f32>,
 }
 
 impl<D: AsRef<Database>> MapperResult<D> {
+    /// Get a reference to the database used by the mapper.
+    #[inline]
+    pub fn as_database(&self) -> &Database {
+        self.db.as_ref()
+    }
+
+    /// Get a reference to read probability matrix, `Q`.
+    #[inline]
+    pub fn probabilities(&self) -> &CooMatrix<f32> {
+        &self.q
+    }
+
+    /// Get a reference to the read proportion vector, `π`.
+    #[inline]
+    pub fn proportions(&self) -> &[f32] {
+        &self.pi
+    }
+
+    /// Compute the bacterium frequency vector, `X`.
+    pub fn frequencies(&self) -> Vec<f32> {
+        let db = self.db.as_ref();
+        let mut x = Vec::with_capacity(self.q.columns());
+        for j in 0..self.q.columns() {
+            if db.amplified[j] > 0 {
+                x.push(self.pi[j] / db.amplified[j] as f32);
+            } else {
+                x.push(0.0);
+            }
+        }
+        let tot = x.iter().sum::<f32>();
+        if tot > 0.0 {
+            for j in 0..self.q.columns() {
+                x[j] /= tot;
+            }
+        }
+        x
+    }
+
+    /// Compute the number of reads mapped to each reference bacterium.
+    pub fn mapped(&self) -> Vec<usize> {
+        let mut mapped = vec![0; self.q.columns()];
+        for (_, j, _) in self.q.non_zero_elements() {
+            mapped[j] += 1;
+        }
+        mapped
+    }
+
+    /// Run one iteration of the read proportion estimation procedure.
     pub fn refine(&mut self) {
         let db = self.db.as_ref();
-
-        // Compute the pi_j vector
         let mut up = vec![0.0; self.q.columns()];
         let mut dens = vec![0.0; self.q.rows()];
         dens.fill(0.0);
@@ -282,20 +323,6 @@ impl<D: AsRef<Database>> MapperResult<D> {
         }
         for j in 0..self.q.columns() {
             self.pi[j] *= up[j] / self.q.rows() as f32;
-        }
-
-        // Compute the X_j matrix
-        self.x.fill(0.0);
-        for j in 0..self.q.columns() {
-            if db.amplified[j] > 0 {
-                self.x[j] = self.pi[j] / db.amplified[j] as f32;
-            }
-        }
-        let tot = self.x.iter().sum::<f32>();
-        if tot > 0.0 {
-            for j in 0..self.q.columns() {
-                self.x[j] /= tot;
-            }
         }
     }
 }
