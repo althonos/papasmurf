@@ -14,6 +14,7 @@ use super::matrix::NonZeroElements;
 use super::primer::Primer;
 use super::utils::Paired;
 
+/// A helper for mapping 16S reads from a sample to a k-mer database.
 #[derive(Debug)]
 pub struct Mapper<D: AsRef<Database>> {
     pub db: D,
@@ -52,26 +53,43 @@ impl<D: AsRef<Database>> Mapper<D> {
         self.db.as_ref()
     }
 
+    /// Set the number of allowed mismatches in the primer.
+    ///
+    /// The database references the primer sequences used to define each
+    /// region of the 16S gene. In the original SMURF implementation, a
+    /// read is discarded when there is not perfect match to any primer of
+    /// the database. To allow for reads of worse quality to be processed,
+    /// PAPASMURF allows modifying the maximum number of mismatches between
+    /// the read and the primers.
     pub fn with_primer_mismatches(mut self, primer_mismatches: usize) -> Self {
         self.primer_mismatches = primer_mismatches;
         self
     }
 
+    /// Set the number of allowed mismatches in the k-mer region.
     pub fn with_kmer_mismatches(mut self, kmer_mismatches: usize) -> Self {
         self.kmer_mismatches = kmer_mismatches;
         self
     }
 
+    /// Set the error probability used for computing the probability of origin.
     pub fn with_error_probability(mut self, error_probability: f32) -> Self {
         self.error_probability = error_probability;
         self
     }
 
+    /// Toggle whether partial hits are enabled.
+    ///
+    /// Once the primer sequence removed, a read may be shorter than the
+    /// k-mers in the database. If partial hits are disabled, then the read
+    /// will be discarded. Otherwise, the partial sequence will be used to
+    /// count for mismatches and compute the probability of origin.
     pub fn with_partial_hits(mut self, partial_hits: bool) -> Self {
         self.partial_hits = partial_hits;
         self
     }
 
+    /// Scan a sequence with a primer to find the minimum number of mismatches.
     fn scan_primer(&self, primer: &Primer, sequence: &str) -> (isize, usize) {
         let min_offset = -(primer.len() as isize) + 1;
         let max_offset = self.primer_region.min(sequence.len() - primer.len()) as isize;
@@ -81,11 +99,11 @@ impl<D: AsRef<Database>> Mapper<D> {
 
         for i in min_offset..max_offset {
             let mm = if i < 0 {
-                let q = &primer.template[(-i) as usize..];
+                let q = &primer.template()[(-i) as usize..];
                 let t = &sequence[..(primer.len() as isize + i) as usize];
                 super::seq::mismatches(q, t) + (-i) as usize
             } else {
-                let q = &primer.template;
+                let q = &primer.template();
                 let t = &sequence[i as usize..(i + primer.len() as isize) as usize];
                 super::seq::mismatches(q, t)
             };
@@ -101,6 +119,7 @@ impl<D: AsRef<Database>> Mapper<D> {
         (min_i, min_mm)
     }
 
+    /// Add a read to the mapper.
     pub fn add(&self, read: Paired<&str>) -> Result<bool, Error> {
         let db = self.db.as_ref();
 
@@ -187,6 +206,11 @@ impl<D: AsRef<Database>> Mapper<D> {
         Ok(mapped)
     }
 
+    /// Finish mapping and return the partial results.
+    ///
+    /// Once all the reads have been processed by the mapper, the final
+    /// probability of origin for each read is computed and aggregated for
+    /// all regions.
     pub fn finish(self) -> MapperResult<D> {
         let db = self.db.as_ref();
         let reads = self.reads.load(Ordering::Relaxed);

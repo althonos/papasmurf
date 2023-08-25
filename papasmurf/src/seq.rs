@@ -1,3 +1,5 @@
+//! Private helper functions to work with ambiguous DNA sequences.
+
 use crate::errors::Error;
 use crate::utils::Rc;
 

@@ -121,7 +121,7 @@ impl Builder {
                 $pos:ident,
                 $mm:ident
             ) => {{
-                $pli.score_into(&$striped, &$primer.profile, &mut $scores);
+                $pli.score_into(&$striped, &$primer.profile(), &mut $scores);
                 $pos = 0;
                 $mm = usize::MAX;
                 let indices = $pli.threshold(&$scores, 0.0);
@@ -150,7 +150,7 @@ impl Builder {
         if let Some(profile) = self
             .primers
             .iter()
-            .flat_map(|pair| [&pair.forward.profile, &pair.backward.profile])
+            .flat_map(|pair| [pair.forward.profile(), pair.backward.profile()])
             .max_by_key(|prof| prof.len())
         {
             striped.configure(&profile);

@@ -45,10 +45,25 @@ use crate::seq::DisambiguationIterator;
 //     }
 // }
 
+/// A sequencing primer marking the boundary of a 16S region.
+///
+/// The SMURF method uses [PCR] primers anchored in conserved regions of the
+/// 16S gene sequence in order to amplify variable regions. These primers are
+/// required to be universal enough to amplify 16S sequences from as many
+/// source organisms as possible.
+///
+/// For fast extraction of k-mers during the database construction stage,
+/// primers are converted into a [Position-Specific Scoring Matrix] using
+/// the [`lightmotif`] crate.
+///
+/// [PCR]: https://en.wikipedia.org/wiki/Polymerase_chain_reaction
+/// [Position-Specific Scoring Matrix]: https://en.wikipedia.org/wiki/Position_weight_matrix
+/// [`lightmotif`]: https://crates.io/crates/lightmotif
+///
 #[derive(Debug, Clone)]
 pub struct Primer {
-    pub template: String,
-    pub profile: ScoringMatrix<Dna>,
+    template: String,
+    profile: ScoringMatrix<Dna>,
 }
 
 impl Primer {
@@ -87,13 +102,27 @@ impl Primer {
         self.template.len()
     }
 
+    /// Get a reference to the sequence of the primer.
+    #[inline]
+    pub fn template(&self) -> &str {
+        self.template.as_str()
+    }
+
+    /// Get a reference to the position-specific scoring matrix of the primer.
+    #[inline]
+    pub fn profile(&self) -> &ScoringMatrix<Dna> {
+        &self.profile
+    }
+
     /// Compute the number of mismatches between the primer and a sequence.
+    #[inline]
     pub fn mismatches(&self, seq: &str) -> usize {
         assert_eq!(self.len(), seq.len());
         mismatches(&self.template, seq)
     }
 
     /// Get the reverse complement of this primer.
+    #[inline]
     pub fn reverse_complement(&self) -> Primer {
         reverse_complement(&self.template)
             .and_then(Self::new)

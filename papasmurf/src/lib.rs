@@ -3,8 +3,8 @@ mod errors;
 mod mapper;
 mod matrix;
 mod primer;
-mod utils;
 mod seq;
+mod utils;
 
 #[doc(hidden)]
 pub mod io;
