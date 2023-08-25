@@ -19,9 +19,20 @@ impl<T> OrderedSet<T> {
         self.data.len()
     }
 
-    /// Get an iterator over references to objects stored in the set.
+    /// Get an iterator over references to the items stored in the set.
     pub fn iter<'a>(&'a self) -> <&'a Self as IntoIterator>::IntoIter {
         (&self).into_iter()
+    }
+
+    /// Get a reference to the memory where the items are stored.
+    pub fn as_slice(&self) -> &[T] {
+        self.data.as_ref()
+    }
+}
+
+impl<T> AsRef<[T]> for OrderedSet<T> {
+    fn as_ref(&self) -> &[T] {
+        self.data.as_ref()
     }
 }
 

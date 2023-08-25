@@ -134,20 +134,20 @@ fn main() {
         // bincode::deserialize_from(f).unwrap()
     };
 
-    println!(
-        "Extracted {} unique forward kmers",
-        db.regions
-            .iter()
-            .map(|x| x.unique_kmers.forward.len())
-            .sum::<usize>()
-    );
-    println!(
-        "Extracted {} unique backward kmers",
-        db.regions
-            .iter()
-            .map(|x| x.unique_kmers.backward.len())
-            .sum::<usize>()
-    );
+    // println!(
+    //     "Extracted {} unique forward kmers",
+    //     db.regions
+    //         .iter()
+    //         .map(|x| x.unique_kmers.forward.len())
+    //         .sum::<usize>()
+    // );
+    // println!(
+    //     "Extracted {} unique backward kmers",
+    //     db.regions
+    //         .iter()
+    //         .map(|x| x.unique_kmers.backward.len())
+    //         .sum::<usize>()
+    // );
 
     // --- MAP READS TO DATABASE
 
@@ -255,13 +255,13 @@ fn main() {
         println!("Processed {} reads", n_total);
         println!("Mapped {} reads", n_mapped);
 
-        for r in 0..db.regions.len() {
-            println!(
-                "[r={}] extracted: {}",
-                r,
-                mapper.expected[r].read().unwrap().len()
-            );
-        }
+        // for r in 0..db.regions.len() {
+        //     println!(
+        //         "[r={}] extracted: {}",
+        //         r,
+        //         mapper.expected[r].read().unwrap().len()
+        //     );
+        // }
 
         println!("Reconstructing");
         let mut result = mapper.finish();
@@ -298,8 +298,9 @@ fn main() {
         .unwrap();
         writeln!(output, "id\ttaxonomy\tselection\tproportion\tmapped").unwrap();
         let mapped = result.mapped();
+        let names = db.names();
         for (j, &freq) in result.frequencies().iter().enumerate() {
-            let name = &db.names[j];
+            let name = &names[j];
             if freq > 0.0 {
                 writeln!(
                     output,

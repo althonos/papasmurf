@@ -20,13 +20,13 @@ pub use self::mapper::MapperResult;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct UnindexedRegion {
     /// The pair of primers defining this region in the database.
-    pub primer: Paired<Primer>,
+    primer: Paired<Primer>,
     /// The set of unique k-mer pairs in this region.
-    pub unique_pairs: OrderedSet<Paired<usize>>,
+    unique_pairs: OrderedSet<Paired<usize>>,
     /// The set of forward and backward k-mers in this region.
-    pub unique_kmers: Paired<OrderedSet<Rc<str>>>,
+    unique_kmers: Paired<OrderedSet<Rc<str>>>,
     /// A sparse matrix storing the k-mer pair for each database reference.
-    pub matrix: CsrMatrix<f32>,
+    matrix: CsrMatrix<f32>,
 }
 
 impl From<UnindexedRegion> for Region {
@@ -73,33 +73,66 @@ impl From<Region> for UnindexedRegion {
 #[serde(from = "UnindexedRegion", into = "UnindexedRegion")]
 pub struct Region {
     /// The pair of primers defining this region in the database.
-    pub primer: Paired<Primer>,
+    primer: Paired<Primer>,
     /// The set of unique k-mer pairs in this region.
-    pub unique_pairs: OrderedSet<Paired<usize>>,
+    unique_pairs: OrderedSet<Paired<usize>>,
     /// The set of forward and backward k-mers in this region.
-    pub unique_kmers: Paired<OrderedSet<Rc<str>>>,
-    // /// A pair of tries storing the unique kmers for the forward and backward region.
-    // pub trie: Paired<KmerTrie>,
+    unique_kmers: Paired<OrderedSet<Rc<str>>>,
     /// A pair of blocks storing the unique kmers for the forward and backward region.
-    pub block: Paired<Kmers>,
+    block: Paired<Kmers>,
     /// A sparse matrix storing the k-mer pair for each database reference.
-    pub matrix: CsrMatrix<f32>,
+    matrix: CsrMatrix<f32>,
+}
+
+impl Region {
+    /// Get a reference to the primer pair used to define this region.
+    #[inline]
+    pub fn primer(&self) -> &Paired<Primer> {
+        &self.primer
+    }
+
+    /// Get a reference to the reference matrix for this region, `M`.
+    #[inline]
+    pub fn matrix(&self) -> &CsrMatrix<f32> {
+        &self.matrix
+    }
 }
 
 /// A database storing forward and backward k-mers for each region.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Database {
     /// The size of the k-mers to extract from the reference sequences.
-    pub k: usize,
+    k: usize,
     /// The regions this database contains.
-    pub regions: Vec<Region>,
+    regions: Vec<Region>,
     /// The identifiers of the individual references in the database.
-    pub names: OrderedSet<Rc<str>>,
+    names: OrderedSet<Rc<str>>,
     /// The number of k-mers extracted from each database reference (R vector).
-    pub amplified: Vec<u8>,
+    amplified: Vec<u8>,
+}
+
+impl Database {
+    /// Get the length of the k-mers stored in the database.
+    #[inline]
+    pub fn k(&self) -> usize {
+        self.k
+    }
+
+    /// Get a reference to the names of the database members.
+    #[inline]
+    pub fn names(&self) -> &[Rc<str>] {
+        self.names.as_slice()
+    }
+
+    /// Get a reference to the regions stored in the database.
+    #[inline]
+    pub fn regions(&self) -> &[Region] {
+        self.regions.as_slice()
+    }
 }
 
 impl AsRef<Database> for &Database {
+    #[inline]
     fn as_ref(&self) -> &Database {
         *self
     }
