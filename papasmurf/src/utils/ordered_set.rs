@@ -30,7 +30,7 @@ impl<T> OrderedSet<T> {
     }
 }
 
-impl<T> AsRef<[T]> for OrderedSet<T> {
+impl<T> AsRef<[T]> for &OrderedSet<T> {
     fn as_ref(&self) -> &[T] {
         self.data.as_ref()
     }

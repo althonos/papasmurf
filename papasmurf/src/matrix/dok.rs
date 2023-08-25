@@ -108,7 +108,7 @@ impl<T: AddAssign + Clone> AddAssign<Self> for DokMatrix<T> {
     }
 }
 
-impl<T> AsRef<HashMap<(usize, usize), T>> for DokMatrix<T> {
+impl<T> AsRef<HashMap<(usize, usize), T>> for &DokMatrix<T> {
     fn as_ref(&self) -> &HashMap<(usize, usize), T> {
         &self.data
     }

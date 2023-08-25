@@ -137,3 +137,10 @@ impl AsRef<Database> for &Database {
         *self
     }
 }
+
+impl AsRef<[Region]> for &Database {
+    #[inline]
+    fn as_ref(&self) -> &[Region] {
+        self.regions()
+    }
+}
