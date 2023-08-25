@@ -1,4 +1,5 @@
 use std::collections::HashSet;
+use std::fmt::Debug;
 use std::hash::Hash;
 
 /// A pair of values for paired-end reads.
@@ -45,6 +46,32 @@ impl<T> Paired<T> {
         F: FnOnce(T, T) -> U,
     {
         f(self.forward, self.backward)
+    }
+}
+
+impl<T, E: Debug> Paired<Result<T, E>> {
+    /// Unwrap a pair of results.
+    #[inline]
+    pub fn unwrap(self) -> Paired<T> {
+        self.map(Result::unwrap)
+    }
+
+    /// Transpose a pair of results into a result of pair.
+    pub fn transpose(self) -> Result<Paired<T>, E> {
+        Ok(Paired::new(self.forward?, self.backward?))
+    }
+}
+
+impl<T> Paired<Option<T>> {
+    /// Unwrap a pair of options.
+    #[inline]
+    pub fn unwrap(self) -> Paired<T> {
+        self.map(Option::unwrap)
+    }
+
+    /// Transpose a pair of options into an option of pair.
+    pub fn transpose(self) -> Option<Paired<T>> {
+        Some(Paired::new(self.forward?, self.backward?))
     }
 }
 
