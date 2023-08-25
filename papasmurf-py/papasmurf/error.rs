@@ -1,12 +1,12 @@
 use std::io::Error as IOError;
 use std::path::Path;
 
+use pyo3::exceptions::PyEOFError;
 use pyo3::exceptions::PyFileNotFoundError;
 use pyo3::exceptions::PyOSError;
 use pyo3::exceptions::PyRuntimeError;
 use pyo3::exceptions::PySyntaxError;
 use pyo3::exceptions::PyValueError;
-use pyo3::exceptions::PyEOFError;
 use pyo3::PyErr;
 
 // ---------------------------------------------------------------------------
@@ -24,7 +24,6 @@ macro_rules! raise(
     })
 );
 
-
 /// A wrapper to convert all errors from the different libraries into a `PyErr`.
 #[derive(Debug)]
 pub enum Error {
@@ -37,8 +36,12 @@ impl From<Error> for PyErr {
     fn from(error: Error) -> PyErr {
         match error {
             // PAPASMURF value errors
-            Error::Papasmurf(papasmurf::Error::InvalidDna) => PyValueError::new_err("invalid DNA symbols"),
-            Error::Papasmurf(papasmurf::Error::InvalidDimensions) => PyValueError::new_err("invalid dimensions"),
+            Error::Papasmurf(papasmurf::Error::InvalidDna) => {
+                PyValueError::new_err("invalid DNA symbols")
+            }
+            Error::Papasmurf(papasmurf::Error::InvalidDimensions) => {
+                PyValueError::new_err("invalid dimensions")
+            }
             // I/O errors
             Error::Io(io_error, path) => {
                 if let Some(n) = io_error.raw_os_error() {
@@ -48,22 +51,23 @@ impl From<Error> for PyErr {
                 }
             }
             // Serde JSON error
-            Error::SerdeJson(err) => if err.is_io() {
-                let io_error: std::io::Error = err.into();
-                if let Some(n) = io_error.raw_os_error() {
-                    PyOSError::new_err((n, io_error.to_string()))
+            Error::SerdeJson(err) => {
+                if err.is_io() {
+                    let io_error: std::io::Error = err.into();
+                    if let Some(n) = io_error.raw_os_error() {
+                        PyOSError::new_err((n, io_error.to_string()))
+                    } else {
+                        PyRuntimeError::new_err(io_error.to_string())
+                    }
+                } else if err.is_eof() {
+                    PyEOFError::new_err(err.to_string())
                 } else {
-                    PyRuntimeError::new_err(io_error.to_string())
+                    PyValueError::new_err(err.to_string())
                 }
-            } else if err.is_eof() {
-                PyEOFError::new_err(err.to_string())
-            } else {
-                PyValueError::new_err(err.to_string())
             }
         }
     }
 }
-
 
 // ---------------------------------------------------------------------------
 

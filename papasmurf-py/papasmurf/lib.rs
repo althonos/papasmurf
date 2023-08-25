@@ -43,10 +43,8 @@ impl Builder {
             }
             let forward = item.get_item(0)?.downcast::<PyString>()?;
             let backward = item.get_item(1)?.downcast::<PyString>()?;
-            let f = papasmurf::Primer::new(forward.to_str()?)
-                .map_err(Error::from)?;
-            let b = papasmurf::Primer::new(backward.to_str()?)
-                .map_err(Error::from)?;
+            let f = papasmurf::Primer::new(forward.to_str()?).map_err(Error::from)?;
+            let b = papasmurf::Primer::new(backward.to_str()?).map_err(Error::from)?;
             p.push(papasmurf::Paired::new(f, b))
         }
         Ok(Self {
@@ -105,8 +103,11 @@ impl Database {
             "messagepack" => match rmp_serde::from_read::<_, papasmurf::Database>(f) {
                 Ok(database) => Ok(Database::from(database)),
                 Err(e) => Err(PyRuntimeError::new_err(e.to_string())),
-            }
-            _ => Err(PyValueError::new_err(format!("invalid format: {:?}", format))),
+            },
+            _ => Err(PyValueError::new_err(format!(
+                "invalid format: {:?}",
+                format
+            ))),
         }
     }
 
@@ -126,8 +127,11 @@ impl Database {
             "messagepack" => match rmp_serde::encode::write(&mut f, self.db.as_ref()) {
                 Ok(_) => Ok(()),
                 Err(e) => Err(PyRuntimeError::new_err(e.to_string())),
-            }
-            _ => Err(PyValueError::new_err(format!("invalid format: {:?}", format))),
+            },
+            _ => Err(PyValueError::new_err(format!(
+                "invalid format: {:?}",
+                format
+            ))),
         }
     }
 }
