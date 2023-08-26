@@ -1,11 +1,8 @@
-use std::io::Error as IOError;
-use std::path::Path;
-
 use pyo3::exceptions::PyEOFError;
-use pyo3::exceptions::PyFileNotFoundError;
+
 use pyo3::exceptions::PyOSError;
 use pyo3::exceptions::PyRuntimeError;
-use pyo3::exceptions::PySyntaxError;
+
 use pyo3::exceptions::PyValueError;
 use pyo3::PyErr;
 

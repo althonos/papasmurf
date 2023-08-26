@@ -307,7 +307,7 @@ impl<D: AsRef<Database>> MapperResult<D> {
 
     /// Run one iteration of the read proportion estimation procedure.
     pub fn refine(&mut self) {
-        let db = self.db.as_ref();
+        let _db = self.db.as_ref();
         let mut up = vec![0.0; self.q.columns()];
         let mut dens = vec![0.0; self.q.rows()];
         dens.fill(0.0);

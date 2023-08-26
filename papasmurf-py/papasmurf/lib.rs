@@ -302,7 +302,7 @@ impl MapperResult {
     pub fn refine(&mut self, n: usize) -> PyResult<()> {
         self.frequencies = None;
         self.proportions = None;
-        for i in 0..n {
+        for _i in 0..n {
             self.result.refine();
         }
         Ok(())
