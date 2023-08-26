@@ -2,7 +2,9 @@ use std::sync::Arc;
 
 use pyo3::exceptions::PyRuntimeError;
 use pyo3::exceptions::PyValueError;
+use pyo3::intern;
 use pyo3::prelude::*;
+use pyo3::types::PyList;
 use pyo3::types::PyString;
 
 mod error;
@@ -54,10 +56,10 @@ impl Builder {
     }
 
     /// Add a new sequence to the builder, extracting k-mer regions.
-    pub fn add<'py>(&self, id: &'py PyString, sequence: &'py PyString) -> PyResult<()> {
-        let id_ = id.to_str()?;
+    pub fn add<'py>(&self, name: &'py PyString, sequence: &'py PyString) -> PyResult<()> {
+        let name_ = name.to_str()?;
         let seq_ = sequence.to_str()?;
-        match self.builder.add(id_, seq_) {
+        match self.builder.add(name_, seq_) {
             Ok(_) => Ok(()),
             Err(e) => Err(Error::from(e).into()),
         }
@@ -170,7 +172,7 @@ impl Mapper {
         let db = AsRef::<Arc<papasmurf::Database>>::as_ref(&self.mapper).clone();
         let mapper = std::mem::replace(&mut self.mapper, papasmurf::Mapper::new(db));
         let result = mapper.finish();
-        Ok(MapperResult { result })
+        Ok(MapperResult::from(result))
     }
 }
 
@@ -180,13 +182,77 @@ impl Mapper {
 #[derive(Debug)]
 pub struct MapperResult {
     result: papasmurf::MapperResult<Arc<papasmurf::Database>>,
+    frequencies: Option<PyObject>,
+    proportions: Option<PyObject>,
+    names: Option<PyObject>,
+}
+
+impl From<papasmurf::MapperResult<Arc<papasmurf::Database>>> for MapperResult {
+    fn from(result: papasmurf::MapperResult<Arc<papasmurf::Database>>) -> Self {
+        Self {
+            result,
+            frequencies: None,
+            proportions: None,
+            names: None,
+        }
+    }
 }
 
 #[pymethods]
 impl MapperResult {
-    pub fn refine(&mut self) -> PyResult<()> {
-        self.result.refine();
+    #[pyo3(signature = (n = 1))]
+    pub fn refine(&mut self, n: usize) -> PyResult<()> {
+        self.frequencies = None;
+        self.proportions = None;
+        for i in 0..n {
+            self.result.refine();
+        }
         Ok(())
+    }
+
+    #[getter]
+    pub fn names(&mut self) -> PyResult<PyObject> {
+        if let Some(names) = &self.names {
+            return Ok(names.clone());
+        }
+        let n = Python::with_gil(|py| {
+            let names = self.result.as_database().names();
+            PyList::new(py, names.iter().map(|s| &**s)).to_object(py)
+        });
+        self.names = Some(n.clone());
+        Ok(n)
+    }
+
+    #[getter]
+    pub fn frequencies(&mut self) -> PyResult<PyObject> {
+        if let Some(freq) = &self.frequencies {
+            return Ok(freq.clone());
+        }
+        let a = Python::with_gil(|py| {
+            let f = py.allow_threads(|| self.result.frequencies());
+            let l = PyList::new(py, f);
+            py.import(intern!(py, "array"))?
+                .call_method1(intern!(py, "array"), (intern!(py, "f"), l))
+                .map(|a| a.to_object(py))
+        })?;
+        self.frequencies = Some(a.clone());
+        Ok(a)
+    }
+
+    #[getter]
+    pub fn proportions(&mut self) -> PyResult<PyObject> {
+        if let Some(prop) = &self.proportions {
+            return Ok(prop.clone());
+        }
+        let a = Python::with_gil(|py| {
+            let p = py.allow_threads(|| self.result.proportions());
+            let l = PyList::new(py, p);
+            py.import(intern!(py, "array"))?
+                .call_method1(intern!(py, "array"), (intern!(py, "f"), l))
+                .map(|a| a.to_object(py))
+        })?;
+        self.proportions = Some(a.clone());
+        Ok(a)
     }
 }
 
