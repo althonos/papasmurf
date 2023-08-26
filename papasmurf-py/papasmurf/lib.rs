@@ -190,9 +190,20 @@ pub struct Mapper {
 impl Mapper {
     /// Create a new mapper for the given database.
     #[new]
-    pub fn __init__<'py>(database: &'py Database) -> PyResult<PyClassInitializer<Self>> {
+    #[pyo3(signature = (database, *, primer_mismatches=2, kmer_mismatches=2, error_probability=0.005, partial_hits=false))]
+    pub fn __init__<'py>(
+        database: &'py Database,
+        primer_mismatches: usize,
+        kmer_mismatches: usize,
+        error_probability: f32,
+        partial_hits: bool,
+    ) -> PyResult<PyClassInitializer<Self>> {
         let db = database.db.clone();
-        let mapper = papasmurf::Mapper::new(db);
+        let mapper = papasmurf::Mapper::new(db)
+            .with_primer_mismatches(primer_mismatches)
+            .with_kmer_mismatches(kmer_mismatches)
+            .with_error_probability(error_probability)
+            .with_partial_hits(partial_hits);
         Ok(Self { mapper }.into())
     }
 
