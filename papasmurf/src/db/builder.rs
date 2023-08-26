@@ -27,8 +27,8 @@ use super::UnindexedRegion;
 /// deduplicated when the builder is transformed into a fully-indexed database.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 struct Sketch {
-    /// The idenfitier of the reference this sketch originates from.
-    pub id: Rc<str>,
+    /// The name of the reference bacterium this sketch originates from.
+    pub name: Rc<str>,
     /// The forward and backward k-mers extracted from the reference sequence.
     pub kmer: Paired<Rc<str>>,
 }
@@ -93,21 +93,22 @@ impl Builder {
     /// The method will return an error when `sequence` does not contain valid
     /// IUPAC DNA symbols.
     ///
-    pub fn add<I>(&self, id: I, sequence: &str) -> Result<usize, Error>
+    pub fn add<I>(&self, name: I, sequence: &str) -> Result<usize, Error>
     where
         I: AsRef<str>,
     {
+        let name_ = name.as_ref();
         let mut n = 0;
         if count_ambiguous(&sequence)? <= 3 {
             for dna in DisambiguationIterator::new(&sequence).unwrap() {
-                n += self.add_unambiguous(&id, &dna)?;
+                n += self.add_unambiguous(name_, &dna)?;
             }
         }
         Ok(n)
     }
 
     // Add a single unambiguous sequence to the builder.
-    fn add_unambiguous<I>(&self, id: I, sequence: &str) -> Result<usize, Error>
+    fn add_unambiguous<I>(&self, name: I, sequence: &str) -> Result<usize, Error>
     where
         I: AsRef<str>,
     {
@@ -156,7 +157,7 @@ impl Builder {
             striped.configure(&profile);
         }
 
-        let mut id_rc: Option<Rc<str>> = None;
+        let mut name_rc: Option<Rc<str>> = None;
         let mut amplified = 0;
 
         for (region, primer) in self.primers.iter().enumerate() {
@@ -211,7 +212,7 @@ impl Builder {
                 .insert(Sketch {
                     // primer: Paired::new(fwd_rc, bwd_rc),
                     kmer: Paired::new(fwd_kmer, bwd_kmer),
-                    id: id_rc.get_or_insert_with(|| id.as_ref().into()).clone(),
+                    name: name_rc.get_or_insert_with(|| name.as_ref().into()).clone(),
                 })
             {
                 amplified += 1;
@@ -236,14 +237,14 @@ impl Builder {
         // Extract the unique names of all the references stored so far.
         let names = sketches_ref
             .iter()
-            .flat_map(|entries| entries.iter().map(|kmer| &kmer.id))
+            .flat_map(|entries| entries.iter().map(|kmer| &kmer.name))
             .cloned()
             .collect::<OrderedSet<_>>();
 
         // Count how many regions were amplified for each reference.
         let mut amplified = vec![0; names.len()];
         for kmer in sketches_ref.iter().map(|v| v.iter()).flatten() {
-            amplified[names[&kmer.id]] += 1;
+            amplified[names[&kmer.name]] += 1;
         }
 
         // Group kmers for individual regions
@@ -273,7 +274,7 @@ impl Builder {
             // Build M_hj matrix
             let mut matrix = DokMatrix::new(unique_pairs.len(), names.len());
             for sketch in sketches.iter() {
-                let j = names[&sketch.id];
+                let j = names[&sketch.name];
                 let h = unique_pairs[&Paired::new(
                     unique.forward[&sketch.kmer.forward],
                     unique.backward[&sketch.kmer.backward],

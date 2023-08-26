@@ -165,10 +165,10 @@ fn main() {
     // const R2: &str = "samples/SPFS5/SPFS5_L001_R2_001.fastq";
 
     for (R1, R2) in [
-        (
-            "samples/GFS6/GFS6_L001_R1_001.fastq",
-            "samples/GFS6/GFS6_L001_R2_001.fastq",
-        ),
+        // (
+        //     "samples/GFS6/GFS6_L001_R1_001.fastq",
+        //     "samples/GFS6/GFS6_L001_R2_001.fastq",
+        // ),
         // (
         //     "samples/H2OS8/H2OS8_L001_R1_001.fastq",
         //     "samples/H2OS8/H2OS8_L001_R2_001.fastq",
@@ -181,10 +181,10 @@ fn main() {
         //     "samples/MAP49S3/MAP49S3_L001_R1_001.fastq",
         //     "samples/MAP49S3/MAP49S3_L001_R2_001.fastq",
         // ),
-        // (
-        //     "samples/MCS7/MCS7_L001_R1_001.fastq",
-        //     "samples/MCS7/MCS7_L001_R2_001.fastq",
-        // ),
+        (
+            "samples/MCS7/MCS7_L001_R1_001.fastq",
+            "samples/MCS7/MCS7_L001_R2_001.fastq",
+        ),
         // (
         //     "samples/PO48S2/PO48S2_L001_R1_001.fastq",
         //     "samples/PO48S2/PO48S2_L001_R2_001.fastq",
