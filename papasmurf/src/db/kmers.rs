@@ -7,7 +7,7 @@ use crate::matrix::MatrixDimensions;
 /// A generic data structure to store all the kmers of a database region.
 #[derive(Debug, Clone)]
 pub struct Kmers {
-    pub block: DenseMatrix<u8>,
+    block: DenseMatrix<u8>,
 }
 
 impl Kmers {
@@ -15,7 +15,7 @@ impl Kmers {
     pub fn new<I>(kmers: I) -> Result<Self, Error>
     where
         I: IntoIterator,
-        <I as IntoIterator>::Item: AsRef<str>,
+        <I as IntoIterator>::Item: AsRef<[u8]>,
         <I as IntoIterator>::IntoIter: ExactSizeIterator,
     {
         let mut it = kmers.into_iter().peekable();
@@ -28,7 +28,7 @@ impl Kmers {
                 return Err(Error::InvalidDimensions);
             }
             let seq = item.as_ref();
-            for (j, b) in seq.as_bytes().iter().enumerate() {
+            for (j, b) in seq.iter().enumerate() {
                 if j > rows {
                     return Err(Error::InvalidDimensions);
                 }
