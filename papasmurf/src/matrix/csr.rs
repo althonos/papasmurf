@@ -303,7 +303,7 @@ mod test {
         a.insert(1, 0, 3);
 
         let c = a.to_csr().into_coo();
-        let mut it = c.iter();
+        let mut it = c.non_zero_elements();
         assert_eq!(it.next(), Some((0, 0, &1)));
         assert_eq!(it.next(), Some((0, 1, &2)));
         assert_eq!(it.next(), Some((1, 0, &3)));
@@ -318,7 +318,7 @@ mod test {
         a.insert(1, 0, 3);
 
         let c = a.to_csr().dot(a.to_csr()).to_coo();
-        let mut it = c.iter();
+        let mut it = c.non_zero_elements();
         assert_eq!(it.next(), Some((0, 0, &7)));
         assert_eq!(it.next(), Some((0, 1, &2)));
         assert_eq!(it.next(), Some((1, 0, &3)));
