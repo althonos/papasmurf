@@ -1,8 +1,8 @@
 use std::sync::Arc;
 
+use pyo3::exceptions::PyIndexError;
 use pyo3::exceptions::PyRuntimeError;
 use pyo3::exceptions::PyValueError;
-use pyo3::exceptions::PyIndexError;
 use pyo3::intern;
 use pyo3::prelude::*;
 use pyo3::types::PyList;
@@ -36,8 +36,28 @@ impl From<Builder> for papasmurf::Builder {
 #[pymethods]
 impl Builder {
     /// Create a new database builder with the given parameters.
+    ///
+    /// Arguments:
+    ///     primers (iterable of `str` pairs): The primers to use to
+    ///         extract the k-mers from the reference sequences. *Both
+    ///         primer sequences must be given in 5'-3' direction*.
+    ///
+    /// Raises:
+    ///     `ValueError`: When given a primer that is not a valid
+    ///         IUPAC DNA sequence.
+    ///
+    /// Example:
+    ///     >>> builder = papasmurf.Builder([
+    ///     ...     ("TGGCGGACGGGTGAGTAA", "CTGCTGCCTCCCGTAGGA"),
+    ///     ...     ("TCCTACGGGAGGCAGCAG", "TATTACCGCGGCTGCTGG"),
+    ///     ...     ("CAGCAGCCGCGGTAATAC", "CGCATTTCACCGCTACAC"),
+    ///     ...     ("AGGATTAGATACCCTGGT", "GAATTAAACCACATGCTC"),
+    ///     ...     ("GCACAAGCGGTGGAGCAT", "CGCTCGTTGCGGGACTTA"),
+    ///     ...     ("AGGAAGGTGGGGATGACG", "CCCGGGAACGTATTCACC"),
+    ///     ... ])
+    ///
     #[new]
-    pub fn __init__<'py>(primers: &'py PyAny) -> PyResult<PyClassInitializer<Self>> {
+    pub fn __new__<'py>(primers: &'py PyAny) -> PyResult<PyClassInitializer<Self>> {
         let mut p = Vec::new();
         for result in primers.iter()? {
             let item = result?;
@@ -57,6 +77,16 @@ impl Builder {
     }
 
     /// Add a new sequence to the builder, extracting k-mer regions.
+    ///
+    /// Arguments:
+    ///     name (`str`): The name of the reference bacterium being added.
+    ///     sequence (`str`): The 16S gene sequence of the reference
+    ///         bacterium being added.
+    ///
+    /// Raises:
+    ///     `ValueError`: When given a sequence that is not a valid IUPAC
+    ///         DNA sequence.
+    ///
     pub fn add<'py>(&self, name: &'py PyString, sequence: &'py PyString) -> PyResult<()> {
         let name_ = name.to_str()?;
         let seq_ = sequence.to_str()?;
@@ -142,6 +172,7 @@ impl Database {
     }
 }
 
+/// An immutable view over the names of the reference bacteria in a database.
 #[pyclass(module = "papasmurf.lib")]
 #[derive(Debug, Clone)]
 pub struct DatabaseNames {
@@ -161,7 +192,6 @@ impl DatabaseNames {
     }
 
     pub fn __getitem__(&self, i: usize) -> PyResult<PyObject> {
-
         let names = self.db.names();
         let mut i_ = i as isize;
 
@@ -173,10 +203,11 @@ impl DatabaseNames {
         }
 
         let name = &names[i_ as usize];
-        Ok(Python::with_gil(|py| PyString::new(py, &*name).to_object(py)))
+        Ok(Python::with_gil(|py| {
+            PyString::new(py, &*name).to_object(py)
+        }))
     }
 }
-
 
 // --- Mapper ------------------------------------------------------------------
 
@@ -189,9 +220,27 @@ pub struct Mapper {
 #[pymethods]
 impl Mapper {
     /// Create a new mapper for the given database.
+    ///
+    /// Arguments:
+    ///     database (`~papasmurf.Database`): The database against which to
+    ///         map the 16S sequencing reads.
+    ///
+    /// Keyword Arguments:
+    ///     primer_mismatches (`int`): The maximum number of allowed
+    ///         mismatches between the forward or backward primer and
+    ///         the read sequence.
+    ///     kmer_mismatches (`int`): The maximum number of allowed
+    ///         mismatches between the forwards or backward database k-mer
+    ///         and the read sequence.
+    ///     error_probability (`float`): The *a priori* error probability
+    ///         per nucleotide to use to compute the probability of origin
+    ///         for each read.
+    ///     partial_hits (`bool`): Whether or not to enable partial read
+    ///         matching for reads shorter than the k-mers.
+    ///
     #[new]
     #[pyo3(signature = (database, *, primer_mismatches=2, kmer_mismatches=2, error_probability=0.005, partial_hits=false))]
-    pub fn __init__<'py>(
+    pub fn __new__<'py>(
         database: &'py Database,
         primer_mismatches: usize,
         kmer_mismatches: usize,
