@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use pyo3::exceptions::PyRuntimeError;
 use pyo3::exceptions::PyValueError;
+use pyo3::exceptions::PyIndexError;
 use pyo3::intern;
 use pyo3::prelude::*;
 use pyo3::types::PyList;
@@ -67,8 +68,7 @@ impl Builder {
 
     /// Build and index the database from the k-mers stored in the builder.
     pub fn to_database(&self) -> PyResult<Database> {
-        let db = Arc::new(self.builder.to_database());
-        Ok(Database { db })
+        Ok(Database::from(self.builder.to_database()))
     }
 }
 
@@ -79,11 +79,15 @@ impl Builder {
 #[derive(Debug)]
 pub struct Database {
     db: Arc<papasmurf::Database>,
+    #[pyo3(get)]
+    names: DatabaseNames,
 }
 
 impl From<papasmurf::Database> for Database {
     fn from(db: papasmurf::Database) -> Self {
-        Self { db: Arc::new(db) }
+        let db = Arc::new(db);
+        let names = DatabaseNames::new(db.clone());
+        Self { db, names }
     }
 }
 
@@ -138,6 +142,42 @@ impl Database {
     }
 }
 
+#[pyclass(module = "papasmurf.lib")]
+#[derive(Debug, Clone)]
+pub struct DatabaseNames {
+    db: Arc<papasmurf::Database>,
+}
+
+impl DatabaseNames {
+    pub fn new(db: Arc<papasmurf::Database>) -> Self {
+        Self { db }
+    }
+}
+
+#[pymethods]
+impl DatabaseNames {
+    pub fn __len__(&self) -> usize {
+        self.db.names().len()
+    }
+
+    pub fn __getitem__(&self, i: usize) -> PyResult<PyObject> {
+
+        let names = self.db.names();
+        let mut i_ = i as isize;
+
+        if i_ < 0 {
+            i_ += names.len() as isize;
+        }
+        if i_ < 0 || i_ >= names.len() as isize {
+            return Err(PyIndexError::new_err("list index out of range"));
+        }
+
+        let name = &names[i_ as usize];
+        Ok(Python::with_gil(|py| PyString::new(py, &*name).to_object(py)))
+    }
+}
+
+
 // --- Mapper ------------------------------------------------------------------
 
 #[pyclass(module = "papasmurf.lib")]
@@ -184,7 +224,6 @@ pub struct MapperResult {
     result: papasmurf::MapperResult<Arc<papasmurf::Database>>,
     frequencies: Option<PyObject>,
     proportions: Option<PyObject>,
-    names: Option<PyObject>,
 }
 
 impl From<papasmurf::MapperResult<Arc<papasmurf::Database>>> for MapperResult {
@@ -193,7 +232,6 @@ impl From<papasmurf::MapperResult<Arc<papasmurf::Database>>> for MapperResult {
             result,
             frequencies: None,
             proportions: None,
-            names: None,
         }
     }
 }
@@ -211,16 +249,9 @@ impl MapperResult {
     }
 
     #[getter]
-    pub fn names(&mut self) -> PyResult<PyObject> {
-        if let Some(names) = &self.names {
-            return Ok(names.clone());
-        }
-        let n = Python::with_gil(|py| {
-            let names = self.result.as_database().names();
-            PyList::new(py, names.iter().map(|s| &**s)).to_object(py)
-        });
-        self.names = Some(n.clone());
-        Ok(n)
+    pub fn names(&self) -> DatabaseNames {
+        let db: &Arc<papasmurf::Database> = self.result.as_ref();
+        DatabaseNames::new(db.clone())
     }
 
     #[getter]

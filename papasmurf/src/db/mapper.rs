@@ -325,3 +325,15 @@ impl<D: AsRef<Database>> MapperResult<D> {
         }
     }
 }
+
+impl<D: AsRef<Database>> AsRef<D> for MapperResult<D> {
+    fn as_ref(&self) -> &D {
+        &self.db
+    }
+}
+
+impl<D: AsRef<Database>> AsRef<Database> for MapperResult<D> {
+    fn as_ref(&self) -> &Database {
+        self.db.as_ref()
+    }
+}
