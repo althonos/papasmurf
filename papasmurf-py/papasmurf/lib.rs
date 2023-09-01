@@ -1,3 +1,5 @@
+use std::io::Read;
+use std::io::Write;
 use std::sync::Arc;
 
 use pyo3::exceptions::PyIndexError;
@@ -9,6 +11,7 @@ use pyo3::types::PyList;
 use pyo3::types::PyString;
 
 mod error;
+mod pyfile;
 
 use self::error::Error;
 
@@ -123,14 +126,20 @@ impl From<papasmurf::Database> for Database {
 
 #[pymethods]
 impl Database {
-    /// Load a database serialized at the given path.
+    /// Load a database serialized at the given file.
     #[staticmethod]
-    #[pyo3(signature = (filename, format = "messagepack"))]
-    pub fn load<'py>(filename: &'py PyString, format: &str) -> PyResult<Self> {
-        let name = filename.to_str()?;
-        let f = std::fs::File::open(name)
-            .map(std::io::BufReader::new)
-            .map_err(|e| Error::Io(e, name.to_string()))?;
+    #[pyo3(signature = (file, format = "messagepack"))]
+    pub fn load<'py>(file: &'py PyAny, format: &str) -> PyResult<Self> {
+        let f: Box<dyn Read> = if let Ok(name) = file.cast_as::<PyString>() {
+            std::fs::File::open(name.to_str()?)
+                .map(std::io::BufReader::new)
+                .map_err(|e| Error::Io(e, name.to_string()))
+                .map(Box::new)?
+        } else {
+            pyfile::PyFileRead::from_ref(file)
+                .map(std::io::BufReader::new)
+                .map(Box::new)?
+        };
         match format {
             "json" => match serde_json::from_reader::<_, papasmurf::Database>(f) {
                 Ok(db) => Ok(Database::from(db)),
@@ -147,13 +156,18 @@ impl Database {
         }
     }
 
-    /// Store the database to the given path.
-    #[pyo3(signature = (filename, format = "messagepack"))]
-    pub fn dump<'py>(&self, filename: &'py PyString, format: &str) -> PyResult<()> {
-        let name = filename.to_str()?;
-        let mut f = match std::fs::File::create(name) {
-            Ok(file) => std::io::BufWriter::new(file),
-            Err(e) => return Err(Error::Io(e, name.to_string()).into()),
+    /// Store the database to the given file.
+    #[pyo3(signature = (file, format = "messagepack"))]
+    pub fn dump<'py>(&self, file: &'py PyString, format: &str) -> PyResult<()> {
+        let mut f: Box<dyn Write> = if let Ok(name) = file.cast_as::<PyString>() {
+            std::fs::File::open(name.to_str()?)
+                .map(std::io::BufWriter::new)
+                .map_err(|e| Error::Io(e, name.to_string()))
+                .map(Box::new)?
+        } else {
+            pyfile::PyFileWrite::from_ref(file)
+                .map(std::io::BufWriter::new)
+                .map(Box::new)?
         };
         match format {
             "json" => match serde_json::to_writer(f, self.db.as_ref()) {
