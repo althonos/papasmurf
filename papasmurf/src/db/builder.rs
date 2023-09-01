@@ -3,9 +3,13 @@ use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 use std::sync::RwLock;
 
+use lightmotif::abc::Dna;
 use lightmotif::pli::Encode;
 use lightmotif::pli::Score;
 use lightmotif::pli::Threshold;
+use lightmotif::pli::Stripe;
+use lightmotif::pli::Pipeline;
+use lightmotif::pli::dispatch::Dispatch;
 
 use crate::errors::Error;
 use crate::matrix::DokMatrix;
@@ -48,6 +52,10 @@ pub struct Builder {
     interner: Interner<str>,
     /// The number of references added to the database.
     references: AtomicUsize,
+    /// The lightmotif pipeline to run PSSM-related operations.
+    pipeline: Pipeline<Dna, Dispatch>,
+    /// The length of the largest primer, or `None`.
+    largest_primer: Option<usize>,
 }
 
 impl Builder {
@@ -66,6 +74,13 @@ impl Builder {
             pair.backward = pair.backward.reverse_complement();
         }
 
+        // Compute length of largest primer
+        let largest_primer = primers
+            .iter()
+            .flat_map(|pair| [pair.forward.profile(), pair.backward.profile()])
+            .map(|prof| prof.len())
+            .max();
+
         Builder {
             primers,
             sketches,
@@ -73,6 +88,8 @@ impl Builder {
             k: 100,
             primer_mismatches: 2,
             references: AtomicUsize::new(0),
+            pipeline: Pipeline::dispatch(),
+            largest_primer,
         }
     }
 
@@ -114,7 +131,6 @@ impl Builder {
     {
         macro_rules! find_best {
             (
-                $pli:ident,
                 $primer:expr,
                 $striped:ident,
                 $scores:ident,
@@ -122,10 +138,10 @@ impl Builder {
                 $pos:ident,
                 $mm:ident
             ) => {{
-                $pli.score_into(&$striped, &$primer.profile(), &mut $scores);
+                self.pipeline.score_into(&$striped, &$primer.profile(), &mut $scores);
                 $pos = 0;
                 $mm = usize::MAX;
-                let indices = $pli.threshold(&$scores, 0.0);
+                let indices = self.pipeline.threshold(&$scores, 0.0);
                 for i in indices {
                     let mm_i = $primer.mismatches(&$seq[i..i + $primer.len()]);
                     if mm_i < $mm || ((mm_i == $mm) && (i < $pos)) {
@@ -140,21 +156,14 @@ impl Builder {
         }
 
         // Create a lightmotif pipeline to search for the primer.
-        let pli = lightmotif::Pipeline::avx2().unwrap();
         let mut scores = lightmotif::pli::StripedScores::<lightmotif::num::U32>::empty();
-
         // Encode the input sequence
-        let mut striped = match pli.encode(&sequence[..sequence.len() - self.k]) {
-            Ok(encoded) => lightmotif::seq::EncodedSequence::from(encoded).to_striped(),
+        let mut striped = match self.pipeline.encode(&sequence[..sequence.len() - self.k]) {
+            Ok(encoded) => self.pipeline.stripe(encoded),
             Err(_) => return Err(Error::InvalidDna),
         };
-        if let Some(profile) = self
-            .primers
-            .iter()
-            .flat_map(|pair| [pair.forward.profile(), pair.backward.profile()])
-            .max_by_key(|prof| prof.len())
-        {
-            striped.configure(&profile);
+        if let Some(&n) = self.largest_primer.as_ref() {
+            striped.configure_wrap(n);
         }
 
         let mut name_rc: Option<Rc<str>> = None;
@@ -165,7 +174,6 @@ impl Builder {
             let mut fwd_pos;
             let mut fwd_mm;
             find_best!(
-                pli,
                 primer.forward,
                 striped,
                 scores,
@@ -177,7 +185,6 @@ impl Builder {
             let mut bwd_pos;
             let mut bwd_mm;
             find_best!(
-                pli,
                 primer.backward,
                 striped,
                 scores,
