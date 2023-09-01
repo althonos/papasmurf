@@ -4,12 +4,12 @@ use std::sync::atomic::Ordering;
 use std::sync::RwLock;
 
 use lightmotif::abc::Dna;
-use lightmotif::pli::Encode;
-use lightmotif::pli::Score;
-use lightmotif::pli::Threshold;
-use lightmotif::pli::Stripe;
-use lightmotif::pli::Pipeline;
 use lightmotif::pli::dispatch::Dispatch;
+use lightmotif::pli::Encode;
+use lightmotif::pli::Pipeline;
+use lightmotif::pli::Score;
+use lightmotif::pli::Stripe;
+use lightmotif::pli::Threshold;
 
 use crate::errors::Error;
 use crate::matrix::DokMatrix;
@@ -138,7 +138,8 @@ impl Builder {
                 $pos:ident,
                 $mm:ident
             ) => {{
-                self.pipeline.score_into(&$striped, &$primer.profile(), &mut $scores);
+                self.pipeline
+                    .score_into(&$striped, &$primer.profile(), &mut $scores);
                 $pos = 0;
                 $mm = usize::MAX;
                 let indices = self.pipeline.threshold(&$scores, 0.0);
@@ -173,25 +174,11 @@ impl Builder {
             // Find the best position for the forward primer
             let mut fwd_pos;
             let mut fwd_mm;
-            find_best!(
-                primer.forward,
-                striped,
-                scores,
-                sequence,
-                fwd_pos,
-                fwd_mm
-            );
+            find_best!(primer.forward, striped, scores, sequence, fwd_pos, fwd_mm);
             // Find the best position for the backward primer
             let mut bwd_pos;
             let mut bwd_mm;
-            find_best!(
-                primer.backward,
-                striped,
-                scores,
-                sequence,
-                bwd_pos,
-                bwd_mm
-            );
+            find_best!(primer.backward, striped, scores, sequence, bwd_pos, bwd_mm);
 
             // Extract and intern the sequence of the forward primer
             if fwd_pos >= bwd_pos {

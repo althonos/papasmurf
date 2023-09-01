@@ -106,7 +106,7 @@ fn main() {
         for (i, read) in reader.map(Result::unwrap).enumerate() {
             let seq = match read.sequence.contains('U') {
                 true => Cow::Owned(read.sequence.replace('U', "T")),
-                false => Cow::Borrowed(&read.sequence)
+                false => Cow::Borrowed(&read.sequence),
             };
             n += builder.add(&read.id, &seq).unwrap();
         }

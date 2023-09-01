@@ -6,7 +6,6 @@ use serde::Deserialize;
 use serde::Serialize;
 
 use crate::matrix::CsrMatrix;
-use crate::matrix::DenseMatrix;
 use crate::matrix::MatrixDimensions;
 use crate::primer::Primer;
 use crate::utils::OrderedSet;
@@ -39,20 +38,14 @@ impl From<UnindexedRegion> for Region {
             .next()
             .map(|kmer| kmer.len())
             .unwrap_or_default();
-        let block = region.unique_kmers.as_ref().map(|kmers| {
-            let mut block = DenseMatrix::new(k, kmers.len());
-            for (j, kmer) in kmers.iter().enumerate() {
-                for (i, x) in kmer.as_bytes().iter().enumerate() {
-                    block[i][j] = *x;
-                }
-            }
-            block
-        });
+        let block = region
+            .unique_kmers
+            .map(|kmers| Kmers::new(kmers.iter().map(|r| r.as_bytes())).unwrap());
         Self {
             primer: region.primer,
             unique_pairs: region.unique_pairs,
             matrix: region.matrix,
-            block: block.map(Kmers::from),
+            block,
         }
     }
 }

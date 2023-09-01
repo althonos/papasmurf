@@ -7,7 +7,6 @@ edition = "2021"
 
 [dependencies]
 typenum = "1.16"
-flate2 = {version = "1.0", optional = true }
 lightmotif = "0.5.0"
 
 [dependencies.serde]
@@ -15,7 +14,9 @@ features = ["derive", "rc"]
 version = "1.0"
 optional = true
 
-
+[dependencies.flate2]
+version = "1.0"
+optional = true
 [dependencies.rmp-serde]
 version = "1.0"
 optional = true
