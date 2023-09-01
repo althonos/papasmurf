@@ -1,5 +1,6 @@
 #![allow(unused)]
 
+use std::borrow::Cow;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::io::BufRead;
@@ -103,7 +104,10 @@ fn main() {
         // Extract reference region kmers from all sequences
         let mut n = 0;
         for (i, read) in reader.map(Result::unwrap).enumerate() {
-            let seq = read.sequence.replace('U', "T");
+            let seq = match read.sequence.contains('U') {
+                true => Cow::Owned(read.sequence.replace('U', "T")),
+                false => Cow::Borrowed(&read.sequence)
+            };
             n += builder.add(&read.id, &seq).unwrap();
         }
 
