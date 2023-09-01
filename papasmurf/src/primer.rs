@@ -98,6 +98,7 @@ impl Primer {
     /// let primer = Primer::new("AGGAAGGTGGGGATGACG").unwrap();
     /// assert_eq!(primer.len(), 18);
     /// ```
+    #[inline]
     pub fn len(&self) -> usize {
         self.template.len()
     }

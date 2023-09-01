@@ -53,6 +53,7 @@ pub fn reverse_complement(s: &str) -> Result<String, Error> {
     Ok(rev)
 }
 
+#[inline]
 pub fn dna_match(c1: char, c2: char) -> bool {
     match c1 {
         'A' => c2 == 'A',
