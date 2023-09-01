@@ -130,7 +130,7 @@ impl Database {
     #[staticmethod]
     #[pyo3(signature = (file, format = "messagepack"))]
     pub fn load<'py>(file: &'py PyAny, format: &str) -> PyResult<Self> {
-        let f: Box<dyn Read> = if let Ok(name) = file.cast_as::<PyString>() {
+        let f: Box<dyn Read> = if let Ok(name) = file.downcast::<PyString>() {
             std::fs::File::open(name.to_str()?)
                 .map(std::io::BufReader::new)
                 .map_err(|e| Error::Io(e, name.to_string()))
@@ -159,7 +159,7 @@ impl Database {
     /// Store the database to the given file.
     #[pyo3(signature = (file, format = "messagepack"))]
     pub fn dump<'py>(&self, file: &'py PyString, format: &str) -> PyResult<()> {
-        let mut f: Box<dyn Write> = if let Ok(name) = file.cast_as::<PyString>() {
+        let mut f: Box<dyn Write> = if let Ok(name) = file.downcast::<PyString>() {
             std::fs::File::open(name.to_str()?)
                 .map(std::io::BufWriter::new)
                 .map_err(|e| Error::Io(e, name.to_string()))

@@ -50,7 +50,7 @@ pub struct PyFileRead<'p> {
 impl<'p> PyFileRead<'p> {
     pub fn from_ref(file: &'p PyAny) -> PyResult<PyFileRead<'p>> {
         let res = file.call_method1("read", (0,))?;
-        if res.cast_as::<PyBytes>().is_ok() {
+        if res.downcast::<PyBytes>().is_ok() {
             Ok(PyFileRead { file })
         } else {
             let ty = res.get_type().name()?.to_string();
