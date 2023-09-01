@@ -90,18 +90,22 @@ impl Builder {
     ///     `ValueError`: When given a sequence that is not a valid IUPAC
     ///         DNA sequence.
     ///
-    pub fn add<'py>(&self, name: &'py PyString, sequence: &'py PyString) -> PyResult<()> {
+    pub fn add<'py>(slf: PyRef<'py, Self>, name: &'py PyString, sequence: &'py PyString) -> PyResult<()> {
         let name_ = name.to_str()?;
         let seq_ = sequence.to_str()?;
-        match self.builder.add(name_, seq_) {
+        let py = slf.py();
+        let builder = &slf.builder;
+        match py.allow_threads(|| builder.add(name_, seq_)) {
             Ok(_) => Ok(()),
             Err(e) => Err(Error::from(e).into()),
         }
     }
 
     /// Build and index the database from the k-mers stored in the builder.
-    pub fn to_database(&self) -> PyResult<Database> {
-        Ok(Database::from(self.builder.to_database()))
+    pub fn to_database<'py>(slf: PyRef<'py, Self>) -> PyResult<Database> {
+        let py = slf.py();
+        let builder = &slf.builder;
+        Ok(Database::from(py.allow_threads(|| builder.to_database())))
     }
 }
 
@@ -158,7 +162,7 @@ impl Database {
 
     /// Store the database to the given file.
     #[pyo3(signature = (file, format = "messagepack"))]
-    pub fn dump<'py>(&self, file: &'py PyString, format: &str) -> PyResult<()> {
+    pub fn dump<'py>(slf: PyRef<'py, Self>, file: &'py PyString, format: &str) -> PyResult<()> {
         let mut f: Box<dyn Write> = if let Ok(name) = file.downcast::<PyString>() {
             std::fs::File::open(name.to_str()?)
                 .map(std::io::BufWriter::new)
@@ -170,11 +174,11 @@ impl Database {
                 .map(Box::new)?
         };
         match format {
-            "json" => match serde_json::to_writer(f, self.db.as_ref()) {
+            "json" => match serde_json::to_writer(f, slf.db.as_ref()) {
                 Ok(_) => Ok(()),
                 Err(e) => Err(Error::from(e).into()),
             },
-            "messagepack" => match rmp_serde::encode::write(&mut f, self.db.as_ref()) {
+            "messagepack" => match rmp_serde::encode::write(&mut f, slf.db.as_ref()) {
                 Ok(_) => Ok(()),
                 Err(e) => Err(PyRuntimeError::new_err(e.to_string())),
             },
@@ -201,12 +205,12 @@ impl DatabaseNames {
 
 #[pymethods]
 impl DatabaseNames {
-    pub fn __len__(&self) -> usize {
-        self.db.names().len()
+    pub fn __len__<'py>(slf: PyRef<'py, Self>) -> usize {
+        slf.db.names().len()
     }
 
-    pub fn __getitem__(&self, i: usize) -> PyResult<PyObject> {
-        let names = self.db.names();
+    pub fn __getitem__<'py>(slf: PyRef<'py, Self>, i: usize) -> PyResult<PyObject> {
+        let names = slf.db.names();
         let mut i_ = i as isize;
 
         if i_ < 0 {
@@ -271,10 +275,11 @@ impl Mapper {
     }
 
     /// Add a new read to the mapper.
-    pub fn add<'py>(&self, forward: &'py PyString, backward: &'py PyString) -> PyResult<bool> {
-        let py = forward.py();
+    pub fn add<'py>(slf: PyRef<'py, Self>, forward: &'py PyString, backward: &'py PyString) -> PyResult<bool> {
         let read = papasmurf::Paired::new(forward.to_str()?, backward.to_str()?);
-        py.allow_threads(|| self.mapper.add(read))
+        let py = slf.py();
+        let mapper = &slf.mapper;
+        py.allow_threads(|| mapper.add(read))
             .map_err(|e| Error::from(e).into())
     }
 
@@ -282,10 +287,11 @@ impl Mapper {
     ///
     /// The mapper is reset and can be used to map a new sample after calling
     /// this method.
-    pub fn finish(&mut self) -> PyResult<MapperResult> {
-        let db = AsRef::<Arc<papasmurf::Database>>::as_ref(&self.mapper).clone();
-        let mapper = std::mem::replace(&mut self.mapper, papasmurf::Mapper::new(db));
-        let result = mapper.finish();
+    pub fn finish<'py>(mut slf: PyRefMut<'py, Self>) -> PyResult<MapperResult> {
+        let py = slf.py();
+        let db = AsRef::<Arc<papasmurf::Database>>::as_ref(&slf.mapper).clone();
+        let mapper = std::mem::replace(&mut slf.mapper, papasmurf::Mapper::new(db));
+        let result = py.allow_threads(|| mapper.finish());
         Ok(MapperResult::from(result))
     }
 }
@@ -323,40 +329,42 @@ impl MapperResult {
     }
 
     #[getter]
-    pub fn names(&self) -> DatabaseNames {
-        let db: &Arc<papasmurf::Database> = self.result.as_ref();
+    pub fn names<'py>(slf: PyRef<'py, Self>) -> DatabaseNames {
+        let db: &Arc<papasmurf::Database> = slf.result.as_ref();
         DatabaseNames::new(db.clone())
     }
 
     #[getter]
-    pub fn frequencies(&mut self) -> PyResult<PyObject> {
-        if let Some(freq) = &self.frequencies {
+    pub fn frequencies<'py>(mut slf: PyRefMut<'py, Self>) -> PyResult<PyObject> {
+        if let Some(freq) = &slf.frequencies {
             return Ok(freq.clone());
         }
+        let result = &slf.result;
         let a = Python::with_gil(|py| {
-            let f = py.allow_threads(|| self.result.frequencies());
+            let f = py.allow_threads(|| result.frequencies());
             let l = PyList::new(py, f);
             py.import(intern!(py, "array"))?
                 .call_method1(intern!(py, "array"), (intern!(py, "f"), l))
                 .map(|a| a.to_object(py))
         })?;
-        self.frequencies = Some(a.clone());
+        slf.frequencies = Some(a.clone());
         Ok(a)
     }
 
     #[getter]
-    pub fn proportions(&mut self) -> PyResult<PyObject> {
-        if let Some(prop) = &self.proportions {
+    pub fn proportions<'py>(mut slf: PyRefMut<'py, Self>) -> PyResult<PyObject> {
+        if let Some(prop) = &slf.proportions {
             return Ok(prop.clone());
         }
+        let result = &slf.result;
         let a = Python::with_gil(|py| {
-            let p = py.allow_threads(|| self.result.proportions());
+            let p = py.allow_threads(|| result.proportions());
             let l = PyList::new(py, p);
             py.import(intern!(py, "array"))?
                 .call_method1(intern!(py, "array"), (intern!(py, "f"), l))
                 .map(|a| a.to_object(py))
         })?;
-        self.proportions = Some(a.clone());
+        slf.proportions = Some(a.clone());
         Ok(a)
     }
 }
