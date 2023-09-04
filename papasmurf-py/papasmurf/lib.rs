@@ -162,7 +162,7 @@ impl Database {
 
     /// Store the database to the given file.
     #[pyo3(signature = (file, format = "messagepack"))]
-    pub fn dump<'py>(slf: PyRef<'py, Self>, file: &'py PyString, format: &str) -> PyResult<()> {
+    pub fn dump<'py>(slf: PyRef<'py, Self>, file: &'py PyAny, format: &str) -> PyResult<()> {
         let mut f: Box<dyn Write> = if let Ok(name) = file.downcast::<PyString>() {
             std::fs::File::open(name.to_str()?)
                 .map(std::io::BufWriter::new)
@@ -339,6 +339,7 @@ impl MapperResult {
         if let Some(freq) = &slf.frequencies {
             return Ok(freq.clone());
         }
+        slf.frequencies = None;
         let result = &slf.result;
         let a = Python::with_gil(|py| {
             let f = py.allow_threads(|| result.frequencies());
@@ -356,6 +357,7 @@ impl MapperResult {
         if let Some(prop) = &slf.proportions {
             return Ok(prop.clone());
         }
+        slf.proportions = None;
         let result = &slf.result;
         let a = Python::with_gil(|py| {
             let p = py.allow_threads(|| result.proportions());
