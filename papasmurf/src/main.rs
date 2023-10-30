@@ -246,29 +246,19 @@ fn main() {
             .progress_with(pb)
             .enumerate()
             .for_each(|(i, read)| {
-                if mapper
+                mapper
                     .add(read.as_ref().map(|r| r.sequence.as_str()))
-                    .unwrap()
-                {
-                    mapped_reads.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-                }
+                    .unwrap();
             });
-
-        let n_total = mapper.reads.load(std::sync::atomic::Ordering::Relaxed);
-        let n_mapped = mapped_reads.load(std::sync::atomic::Ordering::Relaxed);
-        println!("Processed {} reads", n_total);
-        println!("Mapped {} reads", n_mapped);
-
-        // for r in 0..db.regions.len() {
-        //     println!(
-        //         "[r={}] extracted: {}",
-        //         r,
-        //         mapper.expected[r].read().unwrap().len()
-        //     );
-        // }
 
         println!("Reconstructing");
         let mut result = mapper.finish();
+
+        let n_total = result.assigned_reads().iter().sum::<usize>();
+        let n_mapped = result.mapped_reads().iter().sum::<usize>();
+        println!("Processed {} reads", n_total);
+        println!("Mapped {} reads", n_mapped);
+
         println!("Refining");
         for it in 0..10 {
             result.refine();
@@ -300,7 +290,7 @@ fn main() {
             R1, R2, n_total, n_mapped
         )
         .unwrap();
-        writeln!(output, "id\ttaxonomy\tselection\tproportion\tmapped").unwrap();
+        writeln!(output, "id\ttaxonomy\tproportion\tfrequency\tmapped").unwrap();
         let mapped = result.mapped();
         let names = db.names();
         for (j, &freq) in result.frequencies().iter().enumerate() {

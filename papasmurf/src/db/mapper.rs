@@ -16,19 +16,32 @@ use crate::utils::Paired;
 /// A helper for mapping 16S reads from a sample to a k-mer database.
 #[derive(Debug)]
 pub struct Mapper<D: AsRef<Database>> {
-    pub db: D,
-    pub expected: Vec<RwLock<HashMap<(usize, usize), f32>>>,
+    /// The database referenced to by the mapper.
+    db: D,
+    /// The `E` read matching probability matrix for each region.
+    expected: Vec<RwLock<HashMap<(usize, usize), f32>>>,
+    /// The number of allowed mismatches in the primer region.
     primer_mismatches: usize,
+    /// The number of allowed mismatches in the database k-mers region.
     kmer_mismatches: usize,
+    /// The constant error probability per nucleotide.
     error_probability: f32,
+    /// The length of the region where to look for a primer in the reads.
     primer_region: usize,
+    /// Whether or not reads shorter than the database k-mers can be mapped.
     partial_hits: bool,
-    pub reads: AtomicUsize,
+    /// The number of reads given by the mapper so far.
+    reads: AtomicUsize,
+    /// The number of reads assigned to each region after primer scanning.
+    assigned_reads: Vec<AtomicUsize>,
+    /// The number of reads mapped to each region after quality filtering.
+    mapped_reads: Vec<AtomicUsize>,
 }
 
 impl<D: AsRef<Database>> Mapper<D> {
     /// Create a new mapper for the given database.
     pub fn new(db: D) -> Self {
+        let r = db.as_ref().regions.len();
         let expected = db
             .as_ref()
             .regions
@@ -44,6 +57,8 @@ impl<D: AsRef<Database>> Mapper<D> {
             primer_region: 20,
             partial_hits: false,
             reads: AtomicUsize::new(0),
+            assigned_reads: (0..r).map(|_| AtomicUsize::new(0)).collect(),
+            mapped_reads: (0..r).map(|_| AtomicUsize::new(0)).collect(),
         }
     }
 
@@ -122,9 +137,6 @@ impl<D: AsRef<Database>> Mapper<D> {
     pub fn add(&self, read: Paired<&str>) -> Result<bool, Error> {
         let db = self.db.as_ref();
 
-        // Add a new row to the E_i,h matrices
-        let i = self.reads.fetch_add(1, Ordering::Relaxed);
-
         // Find the best matching primer and primer position
         let (r, region, pos, primer_mismatches) = db
             .regions
@@ -148,6 +160,12 @@ impl<D: AsRef<Database>> Mapper<D> {
                 )
             })
             .unwrap();
+
+        /// Keep count of the number of reads assigned to each region
+        self.assigned_reads[r].fetch_add(1, Ordering::Relaxed);
+
+        // Add a new row to the E_i,h matrices
+        let i = self.reads.fetch_add(1, Ordering::Relaxed);
 
         // Skip if primers mismatch the reads
         if primer_mismatches.forward > self.primer_mismatches
@@ -202,6 +220,12 @@ impl<D: AsRef<Database>> Mapper<D> {
             }
         }
 
+        /// Keep count of the number of reads mapped to each region
+        if mapped {
+            self.mapped_reads[r].fetch_add(1, Ordering::Relaxed);
+        }
+
+        // Return whether the read was mapped
         Ok(mapped)
     }
 
@@ -226,10 +250,24 @@ impl<D: AsRef<Database>> Mapper<D> {
             q_matrix = q_matrix + q.into_coo();
         }
 
+        // Recover counts by region
+        let assigned_reads = self
+            .assigned_reads
+            .into_iter()
+            .map(|count| count.load(Ordering::Relaxed))
+            .collect();
+        let mapped_reads = self
+            .mapped_reads
+            .into_iter()
+            .map(|count| count.load(Ordering::Relaxed))
+            .collect();
+
         MapperResult {
             db: self.db,
             pi: vec![1.0 / q_matrix.columns() as f32; q_matrix.columns()],
             q: q_matrix,
+            assigned_reads,
+            mapped_reads,
         }
     }
 }
@@ -255,6 +293,8 @@ pub struct MapperResult<D: AsRef<Database>> {
     db: D,
     q: CooMatrix<f32>,
     pi: Vec<f32>,
+    assigned_reads: Vec<usize>,
+    mapped_reads: Vec<usize>,
 }
 
 impl<D: AsRef<Database>> MapperResult<D> {
@@ -264,7 +304,19 @@ impl<D: AsRef<Database>> MapperResult<D> {
         self.db.as_ref()
     }
 
-    /// Get a reference to read probability matrix, `Q`.
+    /// Get a reference to the number of assigned reads per region.
+    #[inline]
+    pub fn assigned_reads(&self) -> &[usize] {
+        &self.assigned_reads
+    }
+
+    /// Get a reference to the number of mapped reads per region.
+    #[inline]
+    pub fn mapped_reads(&self) -> &[usize] {
+        &self.mapped_reads
+    }
+
+    /// Get a reference to the read probability matrix, `Q`.
     #[inline]
     pub fn probabilities(&self) -> &CooMatrix<f32> {
         &self.q
