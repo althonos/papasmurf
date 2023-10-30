@@ -306,13 +306,13 @@ impl<D: AsRef<Database>> MapperResult<D> {
 
     /// Get a reference to the number of assigned reads per region.
     #[inline]
-    pub fn assigned_reads(&self) -> &[usize] {
+    pub fn assigned_by_region(&self) -> &[usize] {
         &self.assigned_reads
     }
 
     /// Get a reference to the number of mapped reads per region.
     #[inline]
-    pub fn mapped_reads(&self) -> &[usize] {
+    pub fn mapped_by_region(&self) -> &[usize] {
         &self.mapped_reads
     }
 
@@ -348,8 +348,8 @@ impl<D: AsRef<Database>> MapperResult<D> {
         x
     }
 
-    /// Compute the number of reads mapped to each reference bacterium.
-    pub fn mapped(&self) -> Vec<usize> {
+    /// Compute the number of reads mapped to each bacterium.
+    pub fn mapped_by_bacterium(&self) -> Vec<usize> {
         let mut mapped = vec![0; self.q.columns()];
         for (_, j, _) in self.q.non_zero_elements() {
             mapped[j] += 1;

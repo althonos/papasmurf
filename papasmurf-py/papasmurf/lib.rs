@@ -8,6 +8,7 @@ use pyo3::exceptions::PyValueError;
 use pyo3::intern;
 use pyo3::prelude::*;
 use pyo3::types::PyList;
+use pyo3::types::PyTuple;
 use pyo3::types::PyString;
 
 mod error;
@@ -90,7 +91,11 @@ impl Builder {
     ///     `ValueError`: When given a sequence that is not a valid IUPAC
     ///         DNA sequence.
     ///
-    pub fn add<'py>(slf: PyRef<'py, Self>, name: &'py PyString, sequence: &'py PyString) -> PyResult<()> {
+    pub fn add<'py>(
+        slf: PyRef<'py, Self>,
+        name: &'py PyString,
+        sequence: &'py PyString,
+    ) -> PyResult<()> {
         let name_ = name.to_str()?;
         let seq_ = sequence.to_str()?;
         let py = slf.py();
@@ -274,8 +279,21 @@ impl Mapper {
         Ok(Self { mapper }.into())
     }
 
-    /// Add a new read to the mapper.
-    pub fn add<'py>(slf: PyRef<'py, Self>, forward: &'py PyString, backward: &'py PyString) -> PyResult<bool> {
+    /// Add a new paired read to the mapper.
+    /// 
+    /// Arguments:
+    ///     forward (`str`): The forward read to add to the mapper.
+    ///     backward (`str`): The backward read to add to the mapper.
+    /// 
+    /// Returns:
+    ///     `bool`: Whether the read passed quality filtering and was 
+    ///     mapped to any database region.
+    ///     
+    pub fn add<'py>(
+        slf: PyRef<'py, Self>,
+        forward: &'py PyString,
+        backward: &'py PyString,
+    ) -> PyResult<bool> {
         let read = papasmurf::Paired::new(forward.to_str()?, backward.to_str()?);
         let py = slf.py();
         let mapper = &slf.mapper;
@@ -287,6 +305,12 @@ impl Mapper {
     ///
     /// The mapper is reset and can be used to map a new sample after calling
     /// this method.
+    /// 
+    /// Returns:
+    ///     `~papasmurf.MapperResult`: The result of the read mapping, which
+    ///     can be further refined to approximate the unknown read proportion
+    ///     vector.
+    /// 
     pub fn finish<'py>(mut slf: PyRefMut<'py, Self>) -> PyResult<MapperResult> {
         let py = slf.py();
         let db = AsRef::<Arc<papasmurf::Database>>::as_ref(&slf.mapper).clone();
@@ -318,22 +342,14 @@ impl From<papasmurf::MapperResult<Arc<papasmurf::Database>>> for MapperResult {
 
 #[pymethods]
 impl MapperResult {
-    #[pyo3(signature = (n = 1))]
-    pub fn refine(&mut self, n: usize) -> PyResult<()> {
-        self.frequencies = None;
-        self.proportions = None;
-        for _i in 0..n {
-            self.result.refine();
-        }
-        Ok(())
-    }
-
+    /// sequence of `str`: The name of each bacterium in the database.
     #[getter]
     pub fn names<'py>(slf: PyRef<'py, Self>) -> DatabaseNames {
         let db: &Arc<papasmurf::Database> = slf.result.as_ref();
         DatabaseNames::new(db.clone())
     }
 
+    /// `array` of `float`: The bacterium frequency vector, :math:`X`.
     #[getter]
     pub fn frequencies<'py>(mut slf: PyRefMut<'py, Self>) -> PyResult<PyObject> {
         if let Some(freq) = &slf.frequencies {
@@ -352,6 +368,7 @@ impl MapperResult {
         Ok(a)
     }
 
+    /// `array` of `float`: The read proportion vector, :math:`\pi`.
     #[getter]
     pub fn proportions<'py>(mut slf: PyRefMut<'py, Self>) -> PyResult<PyObject> {
         if let Some(prop) = &slf.proportions {
@@ -368,6 +385,52 @@ impl MapperResult {
         })?;
         slf.proportions = Some(a.clone());
         Ok(a)
+    }
+
+    /// `tuple` of `int`: The number of reads assigned to each region.
+    /// 
+    /// A read is assigned to a region when the primer for this region had
+    /// the highest score for the read. It may still fail to pass quality
+    /// control (based on the `Mapper` parameters).
+    #[getter]
+    pub fn assigned_by_region<'py>(slf: PyRef<'py, Self>) -> &'py PyTuple {
+        let assigned = slf.result.assigned_by_region();
+        PyTuple::new(slf.py(), assigned)
+    }
+
+    /// `tuple` of `int`: The number of reads mapped to each region.
+    ///     
+    /// A read is mapped to a region when it was mapped to any database
+    /// k-mer of the region it was assigned to by primer-matching, after
+    /// passing quality control.
+    #[getter]
+    pub fn mapped_by_region<'py>(slf: PyRef<'py, Self>) -> &'py PyTuple {
+        let mapped = slf.result.mapped_by_region();
+        PyTuple::new(slf.py(), mapped)
+    }
+
+    /// `array` of `int`: The number of reads mapped to each bacterium.
+    #[getter]
+    pub fn mapped_by_bacterium<'py>(slf: PyRef<'py, Self>) -> PyResult<PyObject> {
+        let result = &slf.result;
+        Python::with_gil(|py| {
+            let m = py.allow_threads(|| result.mapped_by_bacterium());
+            let l = PyList::new(py, m);
+            py.import(intern!(py, "array"))?
+                .call_method1(intern!(py, "array"), (intern!(py, "f"), l))
+                .map(|a| a.to_object(py))
+        })
+    }
+
+    /// Run one or more iterations of the read proportion estimation procedure.
+    #[pyo3(signature = (n = 1))]
+    pub fn refine(&mut self, n: usize) -> PyResult<()> {
+        self.frequencies = None;
+        self.proportions = None;
+        for _i in 0..n {
+            self.result.refine();
+        }
+        Ok(())
     }
 }
 

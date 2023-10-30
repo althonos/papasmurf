@@ -254,8 +254,8 @@ fn main() {
         println!("Reconstructing");
         let mut result = mapper.finish();
 
-        let n_total = result.assigned_reads().iter().sum::<usize>();
-        let n_mapped = result.mapped_reads().iter().sum::<usize>();
+        let n_total = result.assigned_by_region().iter().sum::<usize>();
+        let n_mapped = result.mapped_by_region().iter().sum::<usize>();
         println!("Processed {} reads", n_total);
         println!("Mapped {} reads", n_mapped);
 
@@ -291,7 +291,7 @@ fn main() {
         )
         .unwrap();
         writeln!(output, "id\ttaxonomy\tproportion\tfrequency\tmapped").unwrap();
-        let mapped = result.mapped();
+        let mapped = result.mapped_by_bacterium();
         let names = db.names();
         for (j, &freq) in result.frequencies().iter().enumerate() {
             let name = &names[j];
