@@ -161,7 +161,7 @@ impl<D: AsRef<Database>> Mapper<D> {
             })
             .unwrap();
 
-        /// Keep count of the number of reads assigned to each region
+        // Keep count of the number of reads assigned to each region
         self.assigned_reads[r].fetch_add(1, Ordering::Relaxed);
 
         // Add a new row to the E_i,h matrices
@@ -220,7 +220,7 @@ impl<D: AsRef<Database>> Mapper<D> {
             }
         }
 
-        /// Keep count of the number of reads mapped to each region
+        // Keep count of the number of reads mapped to each region
         if mapped {
             self.mapped_reads[r].fetch_add(1, Ordering::Relaxed);
         }

@@ -31,7 +31,7 @@ struct UnindexedRegion {
 
 impl From<UnindexedRegion> for Region {
     fn from(region: UnindexedRegion) -> Self {
-        let k = region
+        let _k = region
             .unique_kmers
             .forward
             .iter()
