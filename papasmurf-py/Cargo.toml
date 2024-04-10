@@ -11,7 +11,7 @@ path = "papasmurf/lib.rs"
 version = "0.1.0"
 path = "../papasmurf"
 [dependencies.pyo3]
-version = "0.19.2"
+version = "0.21.1"
 features = ["macros"]
 [dependencies.serde_json]
 version = "1.0"

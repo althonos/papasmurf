@@ -61,17 +61,17 @@ impl Builder {
     ///     ... ])
     ///
     #[new]
-    pub fn __new__<'py>(primers: &'py PyAny) -> PyResult<PyClassInitializer<Self>> {
+    pub fn __new__<'py>(primers: &Bound<'py, PyAny>) -> PyResult<PyClassInitializer<Self>> {
         let mut p = Vec::new();
         for result in primers.iter()? {
             let item = result?;
             if item.len()? != 2 {
                 return Err(PyValueError::new_err("expected pair of strings"));
             }
-            let forward = item.get_item(0)?.downcast::<PyString>()?;
-            let backward = item.get_item(1)?.downcast::<PyString>()?;
-            let f = papasmurf::Primer::new(forward.to_str()?).map_err(Error::from)?;
-            let b = papasmurf::Primer::new(backward.to_str()?).map_err(Error::from)?;
+            let forward = item.get_item(0)?;
+            let backward = item.get_item(1)?;
+            let f = papasmurf::Primer::new(forward.downcast::<PyString>()?.to_str()?).map_err(Error::from)?;
+            let b = papasmurf::Primer::new(backward.downcast::<PyString>()?.to_str()?).map_err(Error::from)?;
             p.push(papasmurf::Paired::new(f, b))
         }
         Ok(Self {
@@ -93,8 +93,8 @@ impl Builder {
     ///
     pub fn add<'py>(
         slf: PyRef<'py, Self>,
-        name: &'py PyString,
-        sequence: &'py PyString,
+        name: &Bound<'py, PyString>,
+        sequence: &Bound<'py, PyString>,
     ) -> PyResult<()> {
         let name_ = name.to_str()?;
         let seq_ = sequence.to_str()?;
@@ -138,14 +138,14 @@ impl Database {
     /// Load a database serialized at the given file.
     #[staticmethod]
     #[pyo3(signature = (file, format = "messagepack"))]
-    pub fn load<'py>(file: &'py PyAny, format: &str) -> PyResult<Self> {
+    pub fn load<'py>(file: &Bound<'py, PyAny>, format: &str) -> PyResult<Self> {
         let f: Box<dyn Read> = if let Ok(name) = file.downcast::<PyString>() {
             std::fs::File::open(name.to_str()?)
                 .map(std::io::BufReader::new)
                 .map_err(|e| Error::Io(e, name.to_string()))
                 .map(Box::new)?
         } else {
-            pyfile::PyFileRead::from_ref(file)
+            pyfile::PyFileRead::from_ref(file.clone())
                 .map(std::io::BufReader::new)
                 .map(Box::new)?
         };
@@ -167,14 +167,14 @@ impl Database {
 
     /// Store the database to the given file.
     #[pyo3(signature = (file, format = "messagepack"))]
-    pub fn dump<'py>(slf: PyRef<'py, Self>, file: &'py PyAny, format: &str) -> PyResult<()> {
+    pub fn dump<'py>(slf: PyRef<'py, Self>, file: &Bound<'py, PyAny>, format: &str) -> PyResult<()> {
         let mut f: Box<dyn Write> = if let Ok(name) = file.downcast::<PyString>() {
             std::fs::File::open(name.to_str()?)
                 .map(std::io::BufWriter::new)
                 .map_err(|e| Error::Io(e, name.to_string()))
                 .map(Box::new)?
         } else {
-            pyfile::PyFileWrite::from_ref(file)
+            pyfile::PyFileWrite::from_ref(file.clone())
                 .map(std::io::BufWriter::new)
                 .map(Box::new)?
         };
@@ -214,7 +214,7 @@ impl DatabaseNames {
         slf.db.names().len()
     }
 
-    pub fn __getitem__<'py>(slf: PyRef<'py, Self>, i: usize) -> PyResult<PyObject> {
+    pub fn __getitem__<'py>(slf: PyRef<'py, Self>, i: usize) -> PyResult<Py<PyString>> {
         let names = slf.db.names();
         let mut i_ = i as isize;
 
@@ -227,7 +227,7 @@ impl DatabaseNames {
 
         let name = &names[i_ as usize];
         Ok(Python::with_gil(|py| {
-            PyString::new(py, &*name).to_object(py)
+            PyString::new_bound(py, &*name).into()
         }))
     }
 }
@@ -291,8 +291,8 @@ impl Mapper {
     ///     
     pub fn add<'py>(
         slf: PyRef<'py, Self>,
-        forward: &'py PyString,
-        backward: &'py PyString,
+        forward: &Bound<'py, PyString>,
+        backward: &Bound<'py, PyString>,
     ) -> PyResult<bool> {
         let read = papasmurf::Paired::new(forward.to_str()?, backward.to_str()?);
         let py = slf.py();
@@ -359,8 +359,8 @@ impl MapperResult {
         let result = &slf.result;
         let a = Python::with_gil(|py| {
             let f = py.allow_threads(|| result.frequencies());
-            let l = PyList::new(py, f);
-            py.import(intern!(py, "array"))?
+            let l = PyList::new_bound(py, f);
+            py.import_bound(intern!(py, "array"))?
                 .call_method1(intern!(py, "array"), (intern!(py, "f"), l))
                 .map(|a| a.to_object(py))
         })?;
@@ -378,8 +378,8 @@ impl MapperResult {
         let result = &slf.result;
         let a = Python::with_gil(|py| {
             let p = py.allow_threads(|| result.proportions());
-            let l = PyList::new(py, p);
-            py.import(intern!(py, "array"))?
+            let l = PyList::new_bound(py, p);
+            py.import_bound(intern!(py, "array"))?
                 .call_method1(intern!(py, "array"), (intern!(py, "f"), l))
                 .map(|a| a.to_object(py))
         })?;
@@ -393,9 +393,9 @@ impl MapperResult {
     /// the highest score for the read. It may still fail to pass quality
     /// control (based on the `Mapper` parameters).
     #[getter]
-    pub fn assigned_by_region<'py>(slf: PyRef<'py, Self>) -> &'py PyTuple {
+    pub fn assigned_by_region<'py>(slf: PyRef<'py, Self>) -> Bound<'py, PyTuple> {
         let assigned = slf.result.assigned_by_region();
-        PyTuple::new(slf.py(), assigned)
+        PyTuple::new_bound(slf.py(), assigned)
     }
 
     /// `tuple` of `int`: The number of reads mapped to each region.
@@ -404,9 +404,9 @@ impl MapperResult {
     /// k-mer of the region it was assigned to by primer-matching, after
     /// passing quality control.
     #[getter]
-    pub fn mapped_by_region<'py>(slf: PyRef<'py, Self>) -> &'py PyTuple {
+    pub fn mapped_by_region<'py>(slf: PyRef<'py, Self>) -> Bound<'py, PyTuple> {
         let mapped = slf.result.mapped_by_region();
-        PyTuple::new(slf.py(), mapped)
+        PyTuple::new_bound(slf.py(), mapped)
     }
 
     /// `array` of `int`: The number of reads mapped to each bacterium.
@@ -415,8 +415,8 @@ impl MapperResult {
         let result = &slf.result;
         Python::with_gil(|py| {
             let m = py.allow_threads(|| result.mapped_by_bacterium());
-            let l = PyList::new(py, m);
-            py.import(intern!(py, "array"))?
+            let l = PyList::new_bound(py, m);
+            py.import_bound(intern!(py, "array"))?
                 .call_method1(intern!(py, "array"), (intern!(py, "f"), l))
                 .map(|a| a.to_object(py))
         })
@@ -437,7 +437,7 @@ impl MapperResult {
 /// PyO3 bindings to ``papasmurf``, a library for 16S multiple region analysis.
 #[pymodule]
 #[pyo3(name = "lib")]
-pub fn init(_py: Python, m: &PyModule) -> PyResult<()> {
+pub fn init<'py>(_py: Python<'py>, m: &Bound<'py, PyModule>) -> PyResult<()> {
     m.add("__package__", "papasmurf")?;
     m.add("__version__", env!("CARGO_PKG_VERSION"))?;
     m.add("__author__", env!("CARGO_PKG_AUTHORS").replace(':', "\n"))?;

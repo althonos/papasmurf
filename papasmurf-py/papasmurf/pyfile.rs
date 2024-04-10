@@ -1,21 +1,11 @@
-use std::cell::RefCell;
 use std::io::Error as IoError;
 use std::io::Read;
 use std::io::Write;
-use std::marker::PhantomData;
-use std::sync::Arc;
-use std::sync::Mutex;
 
 use pyo3::exceptions::PyOSError;
 use pyo3::exceptions::PyTypeError;
-use pyo3::gc::PyTraverseError;
-use pyo3::gc::PyVisit;
 use pyo3::prelude::*;
 use pyo3::types::PyBytes;
-use pyo3::AsPyPointer;
-use pyo3::PyDowncastError;
-use pyo3::PyNativeType;
-use pyo3::PyObject;
 
 // ---------------------------------------------------------------------------
 
@@ -25,7 +15,7 @@ macro_rules! transmute_file_error {
         // Attempt to transmute the Python OSError to an actual
         // Rust `std::io::Error` using `from_raw_os_error`.
         if $e.is_instance_of::<PyOSError>($py) {
-            if let Ok(code) = &$e.value($py).getattr("errno") {
+            if let Ok(code) = &$e.value_bound($py).getattr("errno") {
                 if let Ok(n) = code.extract::<i32>() {
                     return Err(IoError::from_raw_os_error(n));
                 }
@@ -44,11 +34,11 @@ macro_rules! transmute_file_error {
 
 /// A wrapper around a readable Python file borrowed within a GIL lifetime.
 pub struct PyFileRead<'p> {
-    file: &'p PyAny,
+    file: Bound<'p, PyAny>,
 }
 
 impl<'p> PyFileRead<'p> {
-    pub fn from_ref(file: &'p PyAny) -> PyResult<PyFileRead<'p>> {
+    pub fn from_ref(file: Bound<'p, PyAny>) -> PyResult<PyFileRead<'p>> {
         let res = file.call_method1("read", (0,))?;
         if res.downcast::<PyBytes>().is_ok() {
             Ok(PyFileRead { file })
@@ -92,23 +82,23 @@ impl<'p> Read for PyFileRead<'p> {
 
 /// A wrapper around a writable Python file borrowed within a GIL lifetime.
 pub struct PyFileWrite<'p> {
-    file: &'p PyAny,
+    file: Bound<'p, PyAny>,
 }
 
 impl<'p> PyFileWrite<'p> {
-    pub fn from_ref(file: &'p PyAny) -> PyResult<PyFileWrite<'p>> {
-        file.call_method1("write", (PyBytes::new(file.py(), b""),))
+    pub fn from_ref(file: Bound<'p, PyAny>) -> PyResult<PyFileWrite<'p>> {
+        file.call_method1("write", (PyBytes::new_bound(file.py(), b""),))
             .map(|_| PyFileWrite { file })
     }
 }
 
 impl<'p> Write for PyFileWrite<'p> {
     fn write(&mut self, buf: &[u8]) -> Result<usize, IoError> {
-        let bytes = PyBytes::new(self.file.py(), buf);
+        let bytes = PyBytes::new_bound(self.file.py(), buf);
         match self.file.call_method1("write", (bytes,)) {
             Ok(obj) => {
                 // Check `fh.write` returned int, else raise a `TypeError`.
-                if let Ok(len) = usize::extract(&obj) {
+                if let Ok(len) = usize::extract_bound(&obj) {
                     Ok(len)
                 } else {
                     let ty = obj.get_type().name()?.to_string();
