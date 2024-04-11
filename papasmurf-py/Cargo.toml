@@ -2,10 +2,15 @@
 name = "papasmurf-py"
 version = "0.1.0"
 edition = "2021"
+build = "papasmurf/build.rs"
 
 [lib]
 crate-type = ["cdylib", "rlib"]
 path = "papasmurf/lib.rs"
+
+[build-dependencies.built]
+version = "0.7"
+features = ["chrono", "cargo-lock"]
 
 [dependencies.papasmurf]
 version = "0.1.0"
@@ -13,10 +18,10 @@ path = "../papasmurf"
 [dependencies.pyo3]
 version = "0.21.1"
 features = ["macros"]
-[dependencies.serde_json]
-version = "1.0"
-[dependencies.rmp-serde]
-version = "1.1.2"
+[dependencies]
+pyo3-built = "0.5.0"
+serde_json = "1.0"
+rmp-serde = "1.1.2"
 
 [features]
 default = []

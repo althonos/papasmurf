@@ -1,3 +1,8 @@
+extern crate papasmurf;
+#[macro_use]
+extern crate pyo3_built;
+extern crate pyo3;
+
 use std::io::Read;
 use std::io::Write;
 use std::sync::Arc;
@@ -8,13 +13,18 @@ use pyo3::exceptions::PyValueError;
 use pyo3::intern;
 use pyo3::prelude::*;
 use pyo3::types::PyList;
-use pyo3::types::PyTuple;
 use pyo3::types::PyString;
+use pyo3::types::PyTuple;
 
 mod error;
 mod pyfile;
 
 use self::error::Error;
+
+#[allow(dead_code)]
+mod build {
+    include!(concat!(env!("OUT_DIR"), "/built.rs"));
+}
 
 // --- Builder -----------------------------------------------------------------
 
@@ -70,8 +80,10 @@ impl Builder {
             }
             let forward = item.get_item(0)?;
             let backward = item.get_item(1)?;
-            let f = papasmurf::Primer::new(forward.downcast::<PyString>()?.to_str()?).map_err(Error::from)?;
-            let b = papasmurf::Primer::new(backward.downcast::<PyString>()?.to_str()?).map_err(Error::from)?;
+            let f = papasmurf::Primer::new(forward.downcast::<PyString>()?.to_str()?)
+                .map_err(Error::from)?;
+            let b = papasmurf::Primer::new(backward.downcast::<PyString>()?.to_str()?)
+                .map_err(Error::from)?;
             p.push(papasmurf::Paired::new(f, b))
         }
         Ok(Self {
@@ -167,7 +179,11 @@ impl Database {
 
     /// Store the database to the given file.
     #[pyo3(signature = (file, format = "messagepack"))]
-    pub fn dump<'py>(slf: PyRef<'py, Self>, file: &Bound<'py, PyAny>, format: &str) -> PyResult<()> {
+    pub fn dump<'py>(
+        slf: PyRef<'py, Self>,
+        file: &Bound<'py, PyAny>,
+        format: &str,
+    ) -> PyResult<()> {
         let mut f: Box<dyn Write> = if let Ok(name) = file.downcast::<PyString>() {
             std::fs::File::open(name.to_str()?)
                 .map(std::io::BufWriter::new)
@@ -280,13 +296,13 @@ impl Mapper {
     }
 
     /// Add a new paired read to the mapper.
-    /// 
+    ///
     /// Arguments:
     ///     forward (`str`): The forward read to add to the mapper.
     ///     backward (`str`): The backward read to add to the mapper.
-    /// 
+    ///
     /// Returns:
-    ///     `bool`: Whether the read passed quality filtering and was 
+    ///     `bool`: Whether the read passed quality filtering and was
     ///     mapped to any database region.
     ///     
     pub fn add<'py>(
@@ -305,12 +321,12 @@ impl Mapper {
     ///
     /// The mapper is reset and can be used to map a new sample after calling
     /// this method.
-    /// 
+    ///
     /// Returns:
     ///     `~papasmurf.MapperResult`: The result of the read mapping, which
     ///     can be further refined to approximate the unknown read proportion
     ///     vector.
-    /// 
+    ///
     pub fn finish<'py>(mut slf: PyRefMut<'py, Self>) -> PyResult<MapperResult> {
         let py = slf.py();
         let db = AsRef::<Arc<papasmurf::Database>>::as_ref(&slf.mapper).clone();
@@ -388,7 +404,7 @@ impl MapperResult {
     }
 
     /// `tuple` of `int`: The number of reads assigned to each region.
-    /// 
+    ///
     /// A read is assigned to a region when the primer for this region had
     /// the highest score for the read. It may still fail to pass quality
     /// control (based on the `Mapper` parameters).
@@ -437,10 +453,11 @@ impl MapperResult {
 /// PyO3 bindings to ``papasmurf``, a library for 16S multiple region analysis.
 #[pymodule]
 #[pyo3(name = "lib")]
-pub fn init<'py>(_py: Python<'py>, m: &Bound<'py, PyModule>) -> PyResult<()> {
+pub fn init<'py>(py: Python<'py>, m: &Bound<'py, PyModule>) -> PyResult<()> {
     m.add("__package__", "papasmurf")?;
     m.add("__version__", env!("CARGO_PKG_VERSION"))?;
     m.add("__author__", env!("CARGO_PKG_AUTHORS").replace(':', "\n"))?;
+    m.add("__build__", pyo3_built!(py, build))?;
 
     m.add_class::<Database>()?;
     m.add_class::<Builder>()?;
