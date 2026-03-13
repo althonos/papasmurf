@@ -24,19 +24,17 @@ pub fn main() -> PyResult<()> {
 
     // spawn a Python interpreter
     Python::initialize();
-    Python::with_gil(|py| {
+    Python::attach(|py| {
         // insert the project folder in `sys.modules` so that
         // the main module can be imported by Python
         let sys = py.import("sys")?;
-        sys.getattr("path")?
-            .downcast::<PyList>()?
-            .insert(0, folder)?;
+        sys.getattr("path")?.cast::<PyList>()?.insert(0, folder)?;
 
         // create a Python module from our rust code with debug symbols
         let module = PyModule::new(py, "papasmurf.lib")?;
         papasmurf_py::init(py, &module).unwrap();
         sys.getattr("modules")?
-            .downcast::<PyDict>()?
+            .cast::<PyDict>()?
             .set_item("papasmurf.lib", module)?;
 
         // run unittest on the tests

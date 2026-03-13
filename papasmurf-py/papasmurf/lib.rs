@@ -112,7 +112,7 @@ impl Builder {
         let seq_ = sequence.to_str()?;
         let py = slf.py();
         let builder = &slf.builder;
-        match py.allow_threads(|| builder.add(name_, seq_)) {
+        match py.detach(|| builder.add(name_, seq_)) {
             Ok(_) => Ok(()),
             Err(e) => Err(Error::from(e).into()),
         }
@@ -122,7 +122,7 @@ impl Builder {
     pub fn to_database<'py>(slf: PyRef<'py, Self>) -> PyResult<Database> {
         let py = slf.py();
         let builder = &slf.builder;
-        Ok(Database::from(py.allow_threads(|| builder.to_database())))
+        Ok(Database::from(py.detach(|| builder.to_database())))
     }
 }
 
@@ -151,7 +151,7 @@ impl Database {
     #[staticmethod]
     #[pyo3(signature = (file, format = "messagepack"))]
     pub fn load<'py>(file: &Bound<'py, PyAny>, format: &str) -> PyResult<Self> {
-        let f: Box<dyn Read> = if let Ok(name) = file.downcast::<PyString>() {
+        let f: Box<dyn Read> = if let Ok(name) = file.cast::<PyString>() {
             std::fs::File::open(name.to_str()?)
                 .map(std::io::BufReader::new)
                 .map_err(|e| Error::Io(e, name.to_string()))
@@ -184,7 +184,7 @@ impl Database {
         file: &Bound<'py, PyAny>,
         format: &str,
     ) -> PyResult<()> {
-        let mut f: Box<dyn Write> = if let Ok(name) = file.downcast::<PyString>() {
+        let mut f: Box<dyn Write> = if let Ok(name) = file.cast::<PyString>() {
             std::fs::File::open(name.to_str()?)
                 .map(std::io::BufWriter::new)
                 .map_err(|e| Error::Io(e, name.to_string()))
@@ -230,7 +230,8 @@ impl DatabaseNames {
         slf.db.names().len()
     }
 
-    pub fn __getitem__<'py>(slf: PyRef<'py, Self>, i: usize) -> PyResult<Py<PyString>> {
+    pub fn __getitem__<'py>(slf: PyRef<'py, Self>, i: usize) -> PyResult<Bound<'py, PyString>> {
+        let py = slf.py();
         let names = slf.db.names();
         let mut i_ = i as isize;
 
@@ -242,7 +243,7 @@ impl DatabaseNames {
         }
 
         let name = &names[i_ as usize];
-        Ok(Python::with_gil(|py| PyString::new(py, &*name).into()))
+        Ok(PyString::new(py, &*name))
     }
 }
 
@@ -311,7 +312,7 @@ impl Mapper {
         let read = papasmurf::Paired::new(forward.to_str()?, backward.to_str()?);
         let py = slf.py();
         let mapper = &slf.mapper;
-        py.allow_threads(|| mapper.add(read))
+        py.detach(|| mapper.add(read))
             .map_err(|e| Error::from(e).into())
     }
 
@@ -329,7 +330,7 @@ impl Mapper {
         let py = slf.py();
         let db = AsRef::<Arc<papasmurf::Database>>::as_ref(&slf.mapper).clone();
         let mapper = std::mem::replace(&mut slf.mapper, papasmurf::Mapper::new(db));
-        let result = py.allow_threads(|| mapper.finish());
+        let result = py.detach(|| mapper.finish());
         Ok(MapperResult::from(result))
     }
 }
@@ -340,8 +341,8 @@ impl Mapper {
 #[derive(Debug)]
 pub struct MapperResult {
     result: papasmurf::MapperResult<Arc<papasmurf::Database>>,
-    frequencies: Option<PyObject>,
-    proportions: Option<PyObject>,
+    frequencies: Option<Py<PyAny>>,
+    proportions: Option<Py<PyAny>>,
 }
 
 impl From<papasmurf::MapperResult<Arc<papasmurf::Database>>> for MapperResult {
@@ -365,7 +366,7 @@ impl MapperResult {
 
     /// `array` of `float`: The bacterium frequency vector, :math:`X`.
     #[getter]
-    pub fn frequencies<'py>(mut slf: PyRefMut<'py, Self>) -> PyResult<PyObject> {
+    pub fn frequencies<'py>(mut slf: PyRefMut<'py, Self>) -> PyResult<Py<PyAny>> {
         let py = slf.py();
         if let Some(freq) = &slf.frequencies {
             return Ok(freq.clone_ref(py));
@@ -373,7 +374,7 @@ impl MapperResult {
         slf.frequencies = None;
         let result = &slf.result;
         let a = {
-            let f = py.allow_threads(|| result.frequencies());
+            let f = py.detach(|| result.frequencies());
             let l = PyList::new(py, f)?;
             py.import(intern!(py, "array"))?
                 .call_method1(intern!(py, "array"), (intern!(py, "f"), l))
@@ -386,7 +387,7 @@ impl MapperResult {
 
     /// `array` of `float`: The read proportion vector, :math:`\pi`.
     #[getter]
-    pub fn proportions<'py>(mut slf: PyRefMut<'py, Self>) -> PyResult<PyObject> {
+    pub fn proportions<'py>(mut slf: PyRefMut<'py, Self>) -> PyResult<Py<PyAny>> {
         let py = slf.py();
         if let Some(prop) = &slf.proportions {
             return Ok(prop.clone_ref(py));
@@ -394,7 +395,7 @@ impl MapperResult {
         slf.proportions = None;
         let result = &slf.result;
         let a = {
-            let p = py.allow_threads(|| result.proportions());
+            let p = py.detach(|| result.proportions());
             let l = PyList::new(py, p)?;
             py.import(intern!(py, "array"))?
                 .call_method1(intern!(py, "array"), (intern!(py, "f"), l))
@@ -432,7 +433,7 @@ impl MapperResult {
     pub fn mapped_by_bacterium<'py>(slf: PyRef<'py, Self>) -> PyResult<Bound<'py, PyAny>> {
         let py = slf.py();
         let result = &slf.result;
-        let m = py.allow_threads(|| result.mapped_by_bacterium());
+        let m = py.detach(|| result.mapped_by_bacterium());
         let l = PyList::new(py, m)?;
         py.import(intern!(py, "array"))?
             .call_method1(intern!(py, "array"), (intern!(py, "f"), l))
