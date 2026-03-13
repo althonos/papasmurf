@@ -73,16 +73,16 @@ impl Builder {
     #[new]
     pub fn __new__<'py>(primers: &Bound<'py, PyAny>) -> PyResult<PyClassInitializer<Self>> {
         let mut p = Vec::new();
-        for result in primers.iter()? {
+        for result in primers.try_iter()? {
             let item = result?;
             if item.len()? != 2 {
                 return Err(PyValueError::new_err("expected pair of strings"));
             }
             let forward = item.get_item(0)?;
             let backward = item.get_item(1)?;
-            let f = papasmurf::Primer::new(forward.downcast::<PyString>()?.to_str()?)
+            let f = papasmurf::Primer::new(forward.cast::<PyString>()?.to_str()?)
                 .map_err(Error::from)?;
-            let b = papasmurf::Primer::new(backward.downcast::<PyString>()?.to_str()?)
+            let b = papasmurf::Primer::new(backward.cast::<PyString>()?.to_str()?)
                 .map_err(Error::from)?;
             p.push(papasmurf::Paired::new(f, b))
         }
@@ -242,9 +242,7 @@ impl DatabaseNames {
         }
 
         let name = &names[i_ as usize];
-        Ok(Python::with_gil(|py| {
-            PyString::new_bound(py, &*name).into()
-        }))
+        Ok(Python::with_gil(|py| PyString::new(py, &*name).into()))
     }
 }
 
@@ -368,38 +366,42 @@ impl MapperResult {
     /// `array` of `float`: The bacterium frequency vector, :math:`X`.
     #[getter]
     pub fn frequencies<'py>(mut slf: PyRefMut<'py, Self>) -> PyResult<PyObject> {
+        let py = slf.py();
         if let Some(freq) = &slf.frequencies {
-            return Ok(freq.clone());
+            return Ok(freq.clone_ref(py));
         }
         slf.frequencies = None;
         let result = &slf.result;
-        let a = Python::with_gil(|py| {
+        let a = {
             let f = py.allow_threads(|| result.frequencies());
-            let l = PyList::new_bound(py, f);
-            py.import_bound(intern!(py, "array"))?
+            let l = PyList::new(py, f)?;
+            py.import(intern!(py, "array"))?
                 .call_method1(intern!(py, "array"), (intern!(py, "f"), l))
-                .map(|a| a.to_object(py))
-        })?;
-        slf.frequencies = Some(a.clone());
+                .map(|a| a.into_pyobject(py))??
+                .unbind()
+        };
+        slf.frequencies = Some(a.clone_ref(py));
         Ok(a)
     }
 
     /// `array` of `float`: The read proportion vector, :math:`\pi`.
     #[getter]
     pub fn proportions<'py>(mut slf: PyRefMut<'py, Self>) -> PyResult<PyObject> {
+        let py = slf.py();
         if let Some(prop) = &slf.proportions {
-            return Ok(prop.clone());
+            return Ok(prop.clone_ref(py));
         }
         slf.proportions = None;
         let result = &slf.result;
-        let a = Python::with_gil(|py| {
+        let a = {
             let p = py.allow_threads(|| result.proportions());
-            let l = PyList::new_bound(py, p);
-            py.import_bound(intern!(py, "array"))?
+            let l = PyList::new(py, p)?;
+            py.import(intern!(py, "array"))?
                 .call_method1(intern!(py, "array"), (intern!(py, "f"), l))
-                .map(|a| a.to_object(py))
-        })?;
-        slf.proportions = Some(a.clone());
+                .map(|a| a.into_pyobject(py))??
+                .unbind()
+        };
+        slf.proportions = Some(a.clone_ref(py));
         Ok(a)
     }
 
@@ -409,9 +411,9 @@ impl MapperResult {
     /// the highest score for the read. It may still fail to pass quality
     /// control (based on the `Mapper` parameters).
     #[getter]
-    pub fn assigned_by_region<'py>(slf: PyRef<'py, Self>) -> Bound<'py, PyTuple> {
+    pub fn assigned_by_region<'py>(slf: PyRef<'py, Self>) -> PyResult<Bound<'py, PyTuple>> {
         let assigned = slf.result.assigned_by_region();
-        PyTuple::new_bound(slf.py(), assigned)
+        PyTuple::new(slf.py(), assigned)
     }
 
     /// `tuple` of `int`: The number of reads mapped to each region.
@@ -420,22 +422,22 @@ impl MapperResult {
     /// k-mer of the region it was assigned to by primer-matching, after
     /// passing quality control.
     #[getter]
-    pub fn mapped_by_region<'py>(slf: PyRef<'py, Self>) -> Bound<'py, PyTuple> {
+    pub fn mapped_by_region<'py>(slf: PyRef<'py, Self>) -> PyResult<Bound<'py, PyTuple>> {
         let mapped = slf.result.mapped_by_region();
-        PyTuple::new_bound(slf.py(), mapped)
+        PyTuple::new(slf.py(), mapped)
     }
 
     /// `array` of `int`: The number of reads mapped to each bacterium.
     #[getter]
-    pub fn mapped_by_bacterium<'py>(slf: PyRef<'py, Self>) -> PyResult<PyObject> {
+    pub fn mapped_by_bacterium<'py>(slf: PyRef<'py, Self>) -> PyResult<Bound<'py, PyAny>> {
+        let py = slf.py();
         let result = &slf.result;
-        Python::with_gil(|py| {
-            let m = py.allow_threads(|| result.mapped_by_bacterium());
-            let l = PyList::new_bound(py, m);
-            py.import_bound(intern!(py, "array"))?
-                .call_method1(intern!(py, "array"), (intern!(py, "f"), l))
-                .map(|a| a.to_object(py))
-        })
+        let m = py.allow_threads(|| result.mapped_by_bacterium());
+        let l = PyList::new(py, m)?;
+        py.import(intern!(py, "array"))?
+            .call_method1(intern!(py, "array"), (intern!(py, "f"), l))
+            .map(|a| a.into_pyobject(py))?
+            .map_err(|e| PyErr::from(e))
     }
 
     /// Run one or more iterations of the read proportion estimation procedure.

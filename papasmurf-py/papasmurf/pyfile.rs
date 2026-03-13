@@ -15,7 +15,7 @@ macro_rules! transmute_file_error {
         // Attempt to transmute the Python OSError to an actual
         // Rust `std::io::Error` using `from_raw_os_error`.
         if $e.is_instance_of::<PyOSError>($py) {
-            if let Ok(code) = &$e.value_bound($py).getattr("errno") {
+            if let Ok(code) = &$e.value($py).getattr("errno") {
                 if let Ok(n) = code.extract::<i32>() {
                     return Err(IoError::from_raw_os_error(n));
                 }
@@ -40,7 +40,7 @@ pub struct PyFileRead<'p> {
 impl<'p> PyFileRead<'p> {
     pub fn from_ref(file: Bound<'p, PyAny>) -> PyResult<PyFileRead<'p>> {
         let res = file.call_method1("read", (0,))?;
-        if res.downcast::<PyBytes>().is_ok() {
+        if res.cast::<PyBytes>().is_ok() {
             Ok(PyFileRead { file })
         } else {
             let ty = res.get_type().name()?.to_string();
@@ -57,7 +57,7 @@ impl<'p> Read for PyFileRead<'p> {
         match self.file.call_method1("read", (buf.len(),)) {
             Ok(obj) => {
                 // Check `fh.read` returned bytes, else raise a `TypeError`.
-                if let Ok(bytes) = obj.extract::<&PyBytes>() {
+                if let Ok(bytes) = obj.cast::<PyBytes>() {
                     let b = bytes.as_bytes();
                     (&mut buf[..b.len()]).copy_from_slice(b);
                     Ok(b.len())
@@ -87,18 +87,18 @@ pub struct PyFileWrite<'p> {
 
 impl<'p> PyFileWrite<'p> {
     pub fn from_ref(file: Bound<'p, PyAny>) -> PyResult<PyFileWrite<'p>> {
-        file.call_method1("write", (PyBytes::new_bound(file.py(), b""),))
+        file.call_method1("write", (PyBytes::new(file.py(), b""),))
             .map(|_| PyFileWrite { file })
     }
 }
 
 impl<'p> Write for PyFileWrite<'p> {
     fn write(&mut self, buf: &[u8]) -> Result<usize, IoError> {
-        let bytes = PyBytes::new_bound(self.file.py(), buf);
+        let bytes = PyBytes::new(self.file.py(), buf);
         match self.file.call_method1("write", (bytes,)) {
             Ok(obj) => {
                 // Check `fh.write` returned int, else raise a `TypeError`.
-                if let Ok(len) = usize::extract_bound(&obj) {
+                if let Ok(len) = obj.extract::<usize>() {
                     Ok(len)
                 } else {
                     let ty = obj.get_type().name()?.to_string();
