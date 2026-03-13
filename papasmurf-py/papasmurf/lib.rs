@@ -212,7 +212,7 @@ impl Database {
 }
 
 /// An immutable view over the names of the reference bacteria in a database.
-#[pyclass(module = "papasmurf.lib")]
+#[pyclass(module = "papasmurf.lib", from_py_object)]
 #[derive(Debug, Clone)]
 pub struct DatabaseNames {
     db: Arc<papasmurf::Database>,
