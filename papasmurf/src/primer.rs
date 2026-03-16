@@ -70,13 +70,13 @@ impl Primer {
     /// Create a new primer from the given template DNA.
     ///
     /// # Error
-    /// The constructor will fail if given a template string that does not
+    /// The constructor will panic if given a template string that does not
     /// contain extended DNA symbols.
     ///
     pub fn new<S: Into<String>>(template: S) -> Result<Self, Error> {
         let t = template.into();
         let encoded = DisambiguationIterator::new(&t)?.map(|s| {
-            lightmotif::EncodedSequence::encode(&s)
+            lightmotif::EncodedSequence::encode(s.as_bytes())
                 .expect("DisambiguationIterator only produces valid DNA strings")
         });
         let pssm = lightmotif::CountMatrix::from_sequences(encoded)

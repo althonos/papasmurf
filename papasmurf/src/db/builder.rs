@@ -139,11 +139,12 @@ impl Builder {
                 $mm:ident
             ) => {{
                 self.pipeline
-                    .score_into(&$striped, &$primer.profile(), &mut $scores);
+                    .score_into(&$primer.profile(), &$striped, &mut $scores);
                 $pos = 0;
                 $mm = usize::MAX;
-                let indices = self.pipeline.threshold(&$scores, 0.0);
-                for i in indices {
+                let coordinates = self.pipeline.threshold(&$scores, 0.0);
+                for c in coordinates {
+                    let i = $scores.offset(c);
                     let mm_i = $primer.mismatches(&$seq[i..i + $primer.len()]);
                     if mm_i < $mm || ((mm_i == $mm) && (i < $pos)) {
                         $mm = mm_i;
@@ -157,7 +158,7 @@ impl Builder {
         }
 
         // Create a lightmotif pipeline to search for the primer.
-        let mut scores = lightmotif::pli::StripedScores::<lightmotif::num::U32>::empty();
+        let mut scores = lightmotif::scores::StripedScores::<f32, lightmotif::num::U32>::empty();
         // Encode the input sequence
         let mut striped = match self.pipeline.encode(&sequence[..sequence.len() - self.k]) {
             Ok(encoded) => self.pipeline.stripe(encoded),

@@ -7,7 +7,7 @@ edition = "2021"
 
 [dependencies]
 typenum = "1.16"
-lightmotif = "0.6.0"
+lightmotif = "0.10.0"
 
 [dependencies.serde]
 features = ["derive", "rc"]
