@@ -16,6 +16,7 @@ jobs:
           components: rustfmt
       - name: Check code format
         run: cargo fmt --all -- --check
+        
   test:
     name: Test (${{ matrix.rust-toolchain }}, ${{ matrix.cpu }})
     runs-on: ubuntu-latest
@@ -43,6 +44,7 @@ jobs:
         key: ${{ runner.os }}-cargo-${{ matrix.rust-toolchain }}
     - name: Test code
       run: cargo test
+
   cover:
     name: Coverage (${{ matrix.cpu }})
     runs-on: ubuntu-latest
@@ -79,6 +81,7 @@ jobs:
         token: ${{ secrets.CODECOV_TOKEN }}
         codecov_curl_args: "--globoff"
         verbose: true
+
   publish:
     needs: test
     runs-on: ubuntu-latest
@@ -94,6 +97,7 @@ jobs:
       run: cargo publish -p papasmurf --token ${{ secrets.CRATES_IO_TOKEN }}
     - name: Package and publish papasmurf-py
       run: cargo publish -p papasmurf-py --token ${{ secrets.CRATES_IO_TOKEN }}
+
   release:
     environment: GitHub Releases
     runs-on: ubuntu-latest
