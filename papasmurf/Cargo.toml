@@ -33,7 +33,7 @@ optional = true
 version = "1.7"
 optional = true
 [dependencies.indicatif]
-version = "0.17"
+version = "0.18"
 features = ["rayon"]
 optional = true
 
