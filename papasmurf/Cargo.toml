@@ -2,8 +2,14 @@
 name = "papasmurf"
 version = "0.1.0"
 edition = "2021"
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+authors = ["Martin Larralde <martin.larralde@embl.de>"]
+license = "GPL-3.0-or-later"
+description = "Platform-Accelerated Package for Alignment-free SMURF analysis."
+repository = "https://github.com/althonos/papasmurf"
+homepage = "https://github.com/althonos/papasmurf"
+readme = "README.md"
+categories = ["science::bioinformatics"]
+keywords = ["bioinformatics", "metagenomics", "16S", "taxonomy"]
 
 [dependencies]
 typenum = "1.16"

@@ -5,7 +5,7 @@ build-backend = "maturin"
 [project]
 name = "papasmurf"
 dynamic = ["version"]
-description = "PyO3 bindings and Python interface to PAPASMURF, a Platform-Accelerated Package for Alignment-free SMURF analysis"
+description = "PyO3 bindings and Python interface to PAPASMURF, a Platform-Accelerated Package for Alignment-free SMURF analysis."
 readme = 'papasmurf-py/README.md'
 requires-python = ">=3.8"
 license = "GPL-3.0-or-later"

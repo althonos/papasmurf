@@ -2,6 +2,14 @@
 name = "papasmurf-py"
 version = "0.1.0"
 edition = "2021"
+authors = ["Martin Larralde <martin.larralde@embl.de>"]
+license = "GPL-3.0-or-later"
+description = "PyO3 bindings and Python interface to PAPASMURF, a Platform-Accelerated Package for Alignment-free SMURF analysis."
+repository = "https://github.com/althonos/papasmurf"
+homepage = "https://github.com/althonos/papasmurf/tree/main/papasmurf-py"
+readme = "README.md"
+categories = ["science::bioinformatics"]
+keywords = ["bioinformatics", "metagenomics", "16S", "taxonomy"]
 build = "papasmurf/build.rs"
 
 [lib]
