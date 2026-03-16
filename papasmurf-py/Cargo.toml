@@ -1,6 +1,6 @@
 [package]
 name = "papasmurf-py"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 authors = ["Martin Larralde <martin.larralde@embl.de>"]
 license = "GPL-3.0-or-later"
@@ -21,7 +21,7 @@ version = "0.8"
 features = ["chrono", "cargo-lock"]
 
 [dependencies.papasmurf]
-version = "0.1.0"
+version = "0.1.1"
 path = "../papasmurf"
 [dependencies.pyo3]
 version = "0.28.1"

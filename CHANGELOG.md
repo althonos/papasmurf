@@ -6,7 +6,17 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 
 ## [Unreleased]
-[Unreleased]: https://github.com/althonos/papasmurf/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/althonos/papasmurf/compare/v0.1.1...HEAD
+
+## [v0.1.1] - 2026-03-16
+[v0.1.1]: https://github.com/althonos/papasmurf/compare/v0.1.0...v0.1.1
+
+### `papasmurf`
+
+#### Changed
+- Bump `indicatif` to `v0.18.0`. 
+- Update all dependencies to latest versions.
+- Commit the `Cargo.lock` project file.
 
 
 ## [v0.1.0] - 2026-03-16
