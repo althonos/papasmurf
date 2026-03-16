@@ -12,7 +12,7 @@ jobs:
     steps:
     - uses: actions/checkout@v4
     - name: Build manylinux wheels
-      uses: pypa/cibuildwheel@v2.21.3
+      uses: pypa/cibuildwheel@v3.4.0
       env:
         CIBW_ARCHS: aarch64
         CIBW_BUILD: 'cp*-manylinux_aarch64'
@@ -30,7 +30,7 @@ jobs:
     steps:
     - uses: actions/checkout@v4
     - name: Build manylinux wheels
-      uses: pypa/cibuildwheel@v2.21.3
+      uses: pypa/cibuildwheel@v3.4.0
       env:
         CIBW_ARCHS: x86_64
         CIBW_BUILD: 'cp*-manylinux_x86_64'
@@ -51,7 +51,7 @@ jobs:
       with:
         targets: x86_64-apple-darwin
     - name: Build manylinux wheels
-      uses: pypa/cibuildwheel@v2.21.3
+      uses: pypa/cibuildwheel@v3.4.0
       env:
         CIBW_ARCHS: x86_64
         CIBW_BUILD: 'cp*-macosx_x86_64'
@@ -74,7 +74,7 @@ jobs:
       with:
         targets: aarch64-apple-darwin
     - name: Build manylinux wheels
-      uses: pypa/cibuildwheel@v2.21.3
+      uses: pypa/cibuildwheel@v3.4.0
       env:
         CIBW_ARCHS: arm64
         CIBW_BUILD: 'cp*-macosx_arm64'
@@ -93,7 +93,7 @@ jobs:
     - uses: actions/checkout@v4
     - uses: dtolnay/rust-toolchain@stable
     - name: Build manylinux wheels
-      uses: pypa/cibuildwheel@v2.21.3
+      uses: pypa/cibuildwheel@v3.4.0
       env:
         CIBW_ARCHS: AMD64
         CIBW_BUILD: 'cp*-win_amd64'
