@@ -17,7 +17,7 @@ crate-type = ["cdylib", "rlib"]
 path = "papasmurf/lib.rs"
 
 [build-dependencies.built]
-version = "0.7"
+version = "0.8"
 features = ["chrono", "cargo-lock"]
 
 [dependencies.papasmurf]
