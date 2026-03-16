@@ -136,7 +136,10 @@ This library is provided under the open-source
 by the [original SMURF authors](https://github.com/NoamShental). It was developed 
 by [Martin Larralde](https://github.com/althonos/) during his PhD project at 
 the [European Molecular Biology Laboratory](https://www.embl.de/) in the 
-[Zeller team](https://github.com/zellerlab).*
+[Zeller team](https://github.com/zellerlab) with support and testing
+from [Fabian Springer](https://github.com/fabispringer).*
+
+*All brand names and product names used in this material are trademarks or registered trademarks of their respective owners. The author/owner is not affiliated with, endorsed by, or sponsored by any product, organization, or company mentioned. Smurf is a registered trademark of Studio Peyo S.A.*
 
 ## 📚 References
 
