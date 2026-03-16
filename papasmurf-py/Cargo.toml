@@ -28,6 +28,7 @@ default = []
 built = []
 extension-module = ["pyo3/extension-module"]
 nightly = ["pyo3/nightly"]
+abi3 = ["pyo3/abi3-py38"]
 
 [[test]]
 name = "unittest"

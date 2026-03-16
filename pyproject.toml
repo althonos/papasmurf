@@ -47,7 +47,7 @@ classifiers = [
 
 [tool.maturin]
 manifest-path = "papasmurf-py/Cargo.toml"
-features = ["extension-module"]
+features = ["extension-module", "abi3"]
 python-source = "papasmurf-py"
 module-name = "papasmurf.lib"
 

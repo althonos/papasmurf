@@ -80,9 +80,9 @@ impl Builder {
             }
             let forward = item.get_item(0)?;
             let backward = item.get_item(1)?;
-            let f = papasmurf::Primer::new(forward.cast::<PyString>()?.to_str()?)
+            let f = papasmurf::Primer::new(forward.cast::<PyString>()?.to_cow()?)
                 .map_err(Error::from)?;
-            let b = papasmurf::Primer::new(backward.cast::<PyString>()?.to_str()?)
+            let b = papasmurf::Primer::new(backward.cast::<PyString>()?.to_cow()?)
                 .map_err(Error::from)?;
             p.push(papasmurf::Paired::new(f, b))
         }
@@ -108,11 +108,11 @@ impl Builder {
         name: &Bound<'py, PyString>,
         sequence: &Bound<'py, PyString>,
     ) -> PyResult<()> {
-        let name_ = name.to_str()?;
-        let seq_ = sequence.to_str()?;
+        let name_ = name.to_cow()?;
+        let seq_ = sequence.to_cow()?;
         let py = slf.py();
         let builder = &slf.builder;
-        match py.detach(|| builder.add(name_, seq_)) {
+        match py.detach(|| builder.add(name_, &seq_)) {
             Ok(_) => Ok(()),
             Err(e) => Err(Error::from(e).into()),
         }
@@ -152,7 +152,7 @@ impl Database {
     #[pyo3(signature = (file, format = "messagepack"))]
     pub fn load<'py>(file: &Bound<'py, PyAny>, format: &str) -> PyResult<Self> {
         let f: Box<dyn Read> = if let Ok(name) = file.cast::<PyString>() {
-            std::fs::File::open(name.to_str()?)
+            std::fs::File::open(name.to_cow()?.as_ref())
                 .map(std::io::BufReader::new)
                 .map_err(|e| Error::Io(e, name.to_string()))
                 .map(Box::new)?
@@ -185,7 +185,7 @@ impl Database {
         format: &str,
     ) -> PyResult<()> {
         let mut f: Box<dyn Write> = if let Ok(name) = file.cast::<PyString>() {
-            std::fs::File::open(name.to_str()?)
+            std::fs::File::open(name.to_cow()?.as_ref())
                 .map(std::io::BufWriter::new)
                 .map_err(|e| Error::Io(e, name.to_string()))
                 .map(Box::new)?
@@ -309,10 +309,10 @@ impl Mapper {
         forward: &Bound<'py, PyString>,
         backward: &Bound<'py, PyString>,
     ) -> PyResult<bool> {
-        let read = papasmurf::Paired::new(forward.to_str()?, backward.to_str()?);
+        let read = papasmurf::Paired::new(forward.to_cow()?, backward.to_cow()?);
         let py = slf.py();
         let mapper = &slf.mapper;
-        py.detach(|| mapper.add(read))
+        py.detach(|| mapper.add(read.as_ref().map(AsRef::as_ref)))
             .map_err(|e| Error::from(e).into())
     }
 

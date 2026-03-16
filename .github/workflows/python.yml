@@ -16,7 +16,6 @@ jobs:
       env:
         CIBW_ARCHS: aarch64
         CIBW_BUILD: 'cp*-manylinux_aarch64'
-        CIBW_PROJECT_REQUIRES_PYTHON: ">=3.9"
       with:
         output-dir: dist
     - uses: actions/upload-artifact@v4
@@ -34,7 +33,6 @@ jobs:
       env:
         CIBW_ARCHS: x86_64
         CIBW_BUILD: 'cp*-manylinux_x86_64'
-        CIBW_PROJECT_REQUIRES_PYTHON: ">=3.9"
       with:
         output-dir: dist
     - uses: actions/upload-artifact@v4
@@ -57,7 +55,6 @@ jobs:
         CIBW_BUILD: 'cp*-macosx_x86_64'
         CIBW_ENVIRONMENT: MACOSX_DEPLOYMENT_TARGET=12.0
         CIBW_TEST_SKIP: "*"
-        CIBW_PROJECT_REQUIRES_PYTHON: ">=3.9"
       with:
         output-dir: dist
     - uses: actions/upload-artifact@v4
@@ -78,7 +75,6 @@ jobs:
       env:
         CIBW_ARCHS: arm64
         CIBW_BUILD: 'cp*-macosx_arm64'
-        CIBW_PROJECT_REQUIRES_PYTHON: ">=3.9"
       with:
         output-dir: dist
     - uses: actions/upload-artifact@v4
@@ -97,7 +93,6 @@ jobs:
       env:
         CIBW_ARCHS: AMD64
         CIBW_BUILD: 'cp*-win_amd64'
-        CIBW_PROJECT_REQUIRES_PYTHON: ">=3.9"
       with:
         output-dir: dist
     - uses: actions/upload-artifact@v4
