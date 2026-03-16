@@ -31,6 +31,8 @@ does ***not*** aim at being a 1-to-1 reimplementation of the original
 more control over the parameters used in the original to support sequencing 
 data of lesser quality.
 
+*This is the Python version, there is a [Rust crate](https://crates.io/crates/papasmurf) available as well.*
+
 ## 🔧 Installing
 
 <!-- `papasmurf` can be installed directly from [PyPI](https://pypi.org/project/papasmurf/),

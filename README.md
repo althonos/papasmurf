@@ -25,6 +25,8 @@ does ***not*** aim at being a 1-to-1 reimplementation of the original
 more control over the parameters used in the original to support sequencing 
 data of lesser quality.
 
+*This is the Rust version, there is a [Python package](https://pypi.org/project/papasmurf) available as well.*
+
 ### 📋 Features
 
 - **primer profiles**: The primers defining each regions are converted into 
