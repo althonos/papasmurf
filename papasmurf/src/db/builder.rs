@@ -158,7 +158,7 @@ impl Builder {
         }
 
         // Create a lightmotif pipeline to search for the primer.
-        let mut scores = lightmotif::scores::StripedScores::<f32, lightmotif::num::U32>::empty();
+        let mut scores = lightmotif::scores::StripedScores::<f32, _>::empty();
         // Encode the input sequence
         let mut striped = match self.pipeline.encode(&sequence[..sequence.len() - self.k]) {
             Ok(encoded) => self.pipeline.stripe(encoded),
