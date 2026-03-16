@@ -133,11 +133,11 @@ impl<T: Add<Output = T> + PartialEq + Clone + Default> Add<CsrMatrix<T>> for Csr
 /// - Gustavson, Fred G. ‘Two Fast Algorithms for Sparse Matrices:
 ///   Multiplication and Permuted Transposition’. ACM Transactions on
 ///   Mathematical Software 4, no. 3 (September 1978): 250–69.
-///   https://doi.org/10.1145/355791.355796.
+///   <https://doi.org/10.1145/355791.355796>.
 /// - Alexandrov, Luben. ‘Parallel Sparse Matrix-Matrix Multiplication’.
 ///   Hochschulschrift, Institut für Theoretische Informatik (ITI),
 ///   Karlsruher Institut für Technologie (December 2014).
-///   https://doi.org/10.5445/IR/1000128898.
+///   <https://doi.org/10.5445/IR/1000128898>.
 impl<T: AddAssign + Mul<Output = T> + PartialEq + Clone + Default> Dot<&CsrMatrix<T>>
     for CsrMatrix<T>
 {
