@@ -9,7 +9,7 @@ description = "PyO3 bindings and Python interface to PAPASMURF, a Platform-Accel
 readme = 'papasmurf-py/README.md'
 requires-python = ">=3.8"
 license = "GPL-3.0-or-later"
-license-file = "COPYING"
+license-file = "papasmurf-py/COPYING"
 authors = [
   { name = "Martin Larralde", email = "martin.larralde@embl.de" },
 ]
