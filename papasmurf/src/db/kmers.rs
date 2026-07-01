@@ -123,6 +123,7 @@ mod avx2 {
 
     #[target_feature(enable = "avx2")]
     pub unsafe fn mismatches(query: &[u8], kmers: &DenseMatrix<u8>, out: &mut [u8]) {
+        assert!(query.len() < usize::MAX);
         let ones = _mm256_set1_epi8(1);
 
         let mut c = 0;
@@ -193,6 +194,7 @@ mod sse2 {
 
     #[target_feature(enable = "sse2")]
     pub unsafe fn mismatches(query: &[u8], kmers: &DenseMatrix<u8>, out: &mut [u8]) {
+        assert!(query.len() < usize::MAX);
         let ones = _mm_set1_epi8(1);
 
         let mut c = 0;
