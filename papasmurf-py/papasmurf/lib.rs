@@ -436,7 +436,7 @@ impl MapperResult {
         let m = py.detach(|| result.mapped_by_bacterium());
         let l = PyList::new(py, m)?;
         py.import(intern!(py, "array"))?
-            .call_method1(intern!(py, "array"), (intern!(py, "f"), l))
+            .call_method1(intern!(py, "array"), (intern!(py, "Q"), l))
             .map(|a| a.into_pyobject(py))?
             .map_err(|e| PyErr::from(e))
     }
