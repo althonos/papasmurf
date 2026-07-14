@@ -138,27 +138,39 @@ impl Builder {
                 $pos:ident,
                 $mm:ident
             ) => {{
-                self.pipeline
-                    .score_into(&$primer.profile(), &$striped, &mut $scores);
                 $pos = 0;
                 $mm = usize::MAX;
-                let coordinates = self.pipeline.threshold(&$scores, 0.0);
-                for c in coordinates {
-                    let i = $scores.offset(c);
-                    let mm_i = $primer.mismatches(&$seq[i..i + $primer.len()]);
-                    if mm_i < $mm || ((mm_i == $mm) && (i < $pos)) {
+
+                for i in 0..=$seq.len() - $primer.len() {
+                    let mm_i =
+                        crate::seq::mismatches($primer.template(), &$seq[i..i + $primer.len()]);
+                    if mm_i < $mm {
                         $mm = mm_i;
                         $pos = i;
                     }
                 }
-                if $mm > self.primer_mismatches {
-                    continue;
-                }
+
+                // self.pipeline
+                //     .score_into(&$primer.profile(), &$striped, &mut $scores);
+                // $pos = 0;
+                // $mm = usize::MAX;
+                // let coordinates = self.pipeline.threshold(&$scores, 0.0);
+                // for c in coordinates {
+                //     let i = $scores.offset(c);
+                //     let mm_i = $primer.mismatches(&$seq[i..i + $primer.len()]);
+                //     if mm_i < $mm || ((mm_i == $mm) && (i < $pos)) {
+                //         $mm = mm_i;
+                //         $pos = i;
+                //     }
+                // }
+                // if $mm > self.primer_mismatches {
+                //     continue;
+                // }
             }};
         }
 
         // Create a lightmotif pipeline to search for the primer.
-        let mut scores = lightmotif::scores::StripedScores::<f32, _>::empty();
+        // let mut scores = lightmotif::scores::StripedScores::<f32, _>::empty();
         // Encode the input sequence
         let mut striped = match self.pipeline.encode(&sequence[..sequence.len() - self.k]) {
             Ok(encoded) => self.pipeline.stripe(encoded),
@@ -181,7 +193,12 @@ impl Builder {
             let mut bwd_mm;
             find_best!(primer.backward, striped, scores, sequence, bwd_pos, bwd_mm);
 
-            // Extract and intern the sequence of the forward primer
+            // Ignore read if too many mismatches
+            if fwd_mm > self.primer_mismatches || bwd_mm > self.primer_mismatches {
+                continue;
+            }
+
+            // Ensure consistency of coordinates
             if fwd_pos >= bwd_pos {
                 continue;
             }
