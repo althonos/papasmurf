@@ -28,8 +28,10 @@ impl<T: Default + Copy, A: Unsigned> DenseMatrix<T, A> {
 
         // compute offset to aligned memory
         let mut offset = 0;
-        while data[offset..].as_ptr() as usize % c > 0 {
-            offset += 1
+        if c > 0 {
+            while data[offset..].as_ptr() as usize % c > 0 {
+                offset += 1
+            }
         }
 
         Self {
