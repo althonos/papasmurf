@@ -184,6 +184,8 @@ impl Builder {
         let mut amplified = 0;
 
         for (region, primer) in self.primers.iter().enumerate() {
+            let plen = primer.forward.len();
+
             // Find the best position for the forward primer
             let mut fwd_pos;
             let mut fwd_mm;
@@ -202,7 +204,7 @@ impl Builder {
             if fwd_pos >= bwd_pos {
                 continue;
             }
-            if fwd_pos + primer.forward.len() + self.k > sequence.len() {
+            if fwd_pos + plen + self.k > sequence.len() {
                 continue;
             }
             if bwd_pos < self.k {
@@ -210,9 +212,9 @@ impl Builder {
             }
 
             // Extract and intern the k-mer
-            let fwd_kmer = self.interner.intern(
-                &sequence[fwd_pos + primer.forward.len()..fwd_pos + primer.forward.len() + self.k],
-            );
+            let fwd_kmer = self
+                .interner
+                .intern(&sequence[fwd_pos + plen..fwd_pos + plen + self.k]);
             let bwd_kmer = self
                 .interner
                 .intern(&reverse_complement(&sequence[bwd_pos - self.k..bwd_pos])?);

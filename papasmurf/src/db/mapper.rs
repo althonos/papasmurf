@@ -202,12 +202,10 @@ impl<D: AsRef<Database>> Mapper<D> {
         // Record the read if it matches any database kmer
         let mut mapped = false;
         for (h, pair) in region.unique_pairs.iter().enumerate() {
-            if mismatch.forward[pair.forward] as usize + mismatch.backward[pair.backward] as usize
-                <= self.kmer_mismatches
-            {
+            let ne =
+                mismatch.forward[pair.forward] as usize + mismatch.backward[pair.backward] as usize;
+            if ne <= self.kmer_mismatches {
                 let l = kmer.forward.len() + kmer.backward.len();
-                let ne =
-                    (mismatch.forward[pair.forward] + mismatch.backward[pair.backward]) as usize;
                 let e = (self.error_probability / 3.0).powf(ne as f32)
                     * (1.0 - self.error_probability).powf((l - ne) as f32);
                 if e > 0.0 {
