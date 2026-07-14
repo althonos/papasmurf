@@ -202,8 +202,8 @@ impl<D: AsRef<Database>> Mapper<D> {
         // Record the read if it matches any database kmer
         let mut mapped = false;
         for (h, pair) in region.unique_pairs.iter().enumerate() {
-            if mismatch.forward[pair.forward] as usize <= self.kmer_mismatches
-                && mismatch.backward[pair.backward] as usize <= self.kmer_mismatches
+            if mismatch.forward[pair.forward] as usize + mismatch.backward[pair.backward] as usize
+                <= self.kmer_mismatches
             {
                 let l = kmer.forward.len() + kmer.backward.len();
                 let ne =
