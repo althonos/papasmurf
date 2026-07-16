@@ -270,6 +270,9 @@ impl Mapper {
     ///         map the 16S sequencing reads.
     ///
     /// Keyword Arguments:
+    ///     kmer_length (`int`): The length of the k-mers to extract
+    ///         and match to the database. Must be at most ``database.k``.
+    ///         Defaults to ``database.k``.
     ///     primer_mismatches (`int`): The maximum number of allowed
     ///         mismatches between the forward or backward primer and
     ///         the read sequence.
@@ -283,16 +286,20 @@ impl Mapper {
     ///         matching for reads shorter than the k-mers.
     ///
     #[new]
-    #[pyo3(signature = (database, *, primer_mismatches=2, kmer_mismatches=2, error_probability=0.005, partial_hits=false))]
+    #[pyo3(signature = (database, *, kmer_length=None, primer_mismatches=2, kmer_mismatches=2, error_probability=0.005, partial_hits=false))]
     pub fn __new__<'py>(
         database: &'py Database,
+        kmer_length: Option<usize>,
         primer_mismatches: usize,
         kmer_mismatches: usize,
         error_probability: f32,
         partial_hits: bool,
     ) -> PyResult<PyClassInitializer<Self>> {
         let db = database.db.clone();
+        let k = db.k();
         let mapper = papasmurf::Mapper::new(db)
+            .with_kmer_length(kmer_length.unwrap_or(k))
+            .map_err(Error::from)?
             .with_primer_mismatches(primer_mismatches)
             .with_kmer_mismatches(kmer_mismatches)
             .with_error_probability(error_probability)
