@@ -39,6 +39,9 @@ impl From<Error> for PyErr {
             Error::Papasmurf(papasmurf::Error::InvalidDimensions) => {
                 PyValueError::new_err("invalid dimensions")
             }
+            Error::Papasmurf(papasmurf::Error::InvalidKmerLength) => {
+                PyValueError::new_err("invalid k-mer length")
+            }
             // I/O errors
             Error::Io(io_error, path) => {
                 if let Some(n) = io_error.raw_os_error() {

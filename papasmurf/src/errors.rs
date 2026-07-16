@@ -6,6 +6,7 @@ use std::fmt::Formatter;
 pub enum Error {
     InvalidDna,
     InvalidDimensions,
+    InvalidKmerLength,
 }
 
 impl Display for Error {
@@ -13,6 +14,7 @@ impl Display for Error {
         match *self {
             Error::InvalidDna => f.write_str("invalid DNA"),
             Error::InvalidDimensions => f.write_str("invalid dimensions"),
+            Error::InvalidKmerLength => f.write_str("invalid k-mer length"),
         }
     }
 }

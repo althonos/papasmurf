@@ -85,7 +85,7 @@ impl Builder {
             primers,
             sketches,
             interner: Default::default(),
-            k: 130,
+            k: 160,
             primer_mismatches: 2,
             references: AtomicUsize::new(0),
             pipeline: Pipeline::dispatch(),

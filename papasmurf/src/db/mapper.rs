@@ -18,6 +18,8 @@ use crate::utils::Paired;
 pub struct Mapper<D: AsRef<Database>> {
     /// The database referenced to by the mapper.
     db: D,
+    /// The requested k-mer length for matching.
+    kmer_length: usize,
     /// The `E` read matching probability matrix for each region.
     expected: Vec<RwLock<HashMap<(usize, usize), f32>>>,
     /// The number of allowed mismatches in the primer region.
@@ -49,8 +51,7 @@ impl<D: AsRef<Database>> Mapper<D> {
             .map(|_| RwLock::from(HashMap::new()))
             .collect();
         Self {
-            expected,
-            db,
+            kmer_length: db.as_ref().k,
             primer_mismatches: 2,
             kmer_mismatches: 2,
             error_probability: 0.005,
@@ -59,6 +60,8 @@ impl<D: AsRef<Database>> Mapper<D> {
             reads: AtomicUsize::new(0),
             assigned_reads: (0..r).map(|_| AtomicUsize::new(0)).collect(),
             mapped_reads: (0..r).map(|_| AtomicUsize::new(0)).collect(),
+            expected,
+            db,
         }
     }
 
@@ -80,10 +83,20 @@ impl<D: AsRef<Database>> Mapper<D> {
         self
     }
 
-    /// Set the number of allowed mismatches in the k-mer region.
+    /// Set the length of k-mer regions to match.
     pub fn with_kmer_mismatches(mut self, kmer_mismatches: usize) -> Self {
         self.kmer_mismatches = kmer_mismatches;
         self
+    }
+
+    /// Set the number of allowed mismatches in the k-mer region.
+    pub fn with_kmer_length(mut self, kmer_length: usize) -> Result<Self, Error> {
+        if kmer_length > self.db.as_ref().k {
+            Err(Error::InvalidKmerLength)
+        } else {
+            self.kmer_length = kmer_length;
+            Ok(self)
+        }
     }
 
     /// Set the error probability used for computing the probability of origin.
@@ -171,6 +184,10 @@ impl<D: AsRef<Database>> Mapper<D> {
         if primer_mismatches.forward > self.primer_mismatches
             || primer_mismatches.backward > self.primer_mismatches
         {
+            println!(
+                "discarding: primer mismatch fwd={} bwd={} (max={})",
+                primer_mismatches.forward, primer_mismatches.backward, self.primer_mismatches
+            );
             return Ok(false);
         }
 
@@ -182,14 +199,16 @@ impl<D: AsRef<Database>> Mapper<D> {
 
         // Check that the kmer is long enough for the database regions or that
         // partial mapping is enabled in the mapper.
-        if kmer.forward.len() > db.k {
-            kmer.forward = &kmer.forward[..db.k];
-        } else if kmer.forward.len() < db.k && !self.partial_hits {
+        if kmer.forward.len() > self.kmer_length {
+            kmer.forward = &kmer.forward[..self.kmer_length];
+        } else if kmer.forward.len() < self.kmer_length && !self.partial_hits {
+            println!("discarding: partial forward kmer");
             return Ok(false);
         }
-        if kmer.backward.len() > db.k {
-            kmer.backward = &kmer.backward[..db.k];
-        } else if kmer.backward.len() < db.k && !self.partial_hits {
+        if kmer.backward.len() > self.kmer_length {
+            kmer.backward = &kmer.backward[..self.kmer_length];
+        } else if kmer.backward.len() < self.kmer_length && !self.partial_hits {
+            println!("discarding: partial reverse kmer");
             return Ok(false);
         }
 
