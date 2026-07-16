@@ -209,6 +209,12 @@ impl Database {
             ))),
         }
     }
+
+    /// `int`: The length of the k-mer regions.
+    #[getter]
+    pub fn k<'py>(slf: PyRef<'py, Self>) -> usize {
+        slf.db.k()
+    }
 }
 
 /// An immutable view over the names of the reference bacteria in a database.
