@@ -292,7 +292,7 @@ impl Mapper {
         kmer_length: Option<usize>,
         primer_mismatches: usize,
         kmer_mismatches: usize,
-        error_probability: f32,
+        error_probability: f64,
         partial_hits: bool,
     ) -> PyResult<PyClassInitializer<Self>> {
         let db = database.db.clone();
@@ -390,7 +390,7 @@ impl MapperResult {
             let f = py.detach(|| result.frequencies());
             let l = PyList::new(py, f)?;
             py.import(intern!(py, "array"))?
-                .call_method1(intern!(py, "array"), (intern!(py, "f"), l))
+                .call_method1(intern!(py, "array"), (intern!(py, "d"), l))
                 .map(|a| a.into_pyobject(py))??
                 .unbind()
         };
@@ -411,7 +411,7 @@ impl MapperResult {
             let p = py.detach(|| result.proportions());
             let l = PyList::new(py, p)?;
             py.import(intern!(py, "array"))?
-                .call_method1(intern!(py, "array"), (intern!(py, "f"), l))
+                .call_method1(intern!(py, "array"), (intern!(py, "d"), l))
                 .map(|a| a.into_pyobject(py))??
                 .unbind()
         };

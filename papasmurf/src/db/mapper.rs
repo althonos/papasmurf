@@ -21,13 +21,13 @@ pub struct Mapper<D: AsRef<Database>> {
     /// The requested k-mer length for matching.
     kmer_length: usize,
     /// The `E` read matching probability matrix for each region.
-    expected: Vec<RwLock<HashMap<(usize, usize), f32>>>,
+    expected: Vec<RwLock<HashMap<(usize, usize), f64>>>,
     /// The number of allowed mismatches in the primer region.
     primer_mismatches: usize,
     /// The number of allowed mismatches in the database k-mers region.
     kmer_mismatches: usize,
     /// The constant error probability per nucleotide.
-    error_probability: f32,
+    error_probability: f64,
     /// The length of the region where to look for a primer in the reads.
     primer_region: usize,
     /// Whether or not reads shorter than the database k-mers can be mapped.
@@ -100,7 +100,7 @@ impl<D: AsRef<Database>> Mapper<D> {
     }
 
     /// Set the error probability used for computing the probability of origin.
-    pub fn with_error_probability(mut self, error_probability: f32) -> Self {
+    pub fn with_error_probability(mut self, error_probability: f64) -> Self {
         self.error_probability = error_probability;
         self
     }
@@ -225,13 +225,13 @@ impl<D: AsRef<Database>> Mapper<D> {
                 mismatch.forward[pair.forward] as usize + mismatch.backward[pair.backward] as usize;
             if ne <= self.kmer_mismatches {
                 let l = kmer.forward.len() + kmer.backward.len();
-                let e = (self.error_probability / 3.0).powf(ne as f32)
-                    * (1.0 - self.error_probability).powf((l - ne) as f32);
+                let e = (self.error_probability / 3.0).powi(ne as i32)
+                    * (1.0 - self.error_probability).powi((l - ne) as i32);
                 if e > 0.0 {
                     self.expected[r]
                         .write()
                         .expect("lock was poisoned")
-                        .insert((i, h), e);
+                        .insert((i, h), e as f64);
                     mapped = true;
                 }
             }
@@ -256,7 +256,7 @@ impl<D: AsRef<Database>> Mapper<D> {
         let reads = self.reads.load(Ordering::Relaxed);
 
         // Compute the Q_i,j matrix
-        let mut q_matrix = CooMatrix::<f32>::new(reads, db.names.len());
+        let mut q_matrix = CooMatrix::<f64>::new(reads, db.names.len());
         for (region, expected) in db.regions.iter().zip(self.expected) {
             let e = DokMatrix::with_data(
                 reads,
@@ -281,7 +281,7 @@ impl<D: AsRef<Database>> Mapper<D> {
 
         MapperResult {
             db: self.db,
-            pi: vec![1.0 / q_matrix.columns() as f32; q_matrix.columns()],
+            pi: vec![1.0 / q_matrix.columns() as f64; q_matrix.columns()],
             q: q_matrix,
             assigned_reads,
             mapped_reads,
@@ -308,8 +308,8 @@ impl<D: AsRef<Database>> AsRef<Database> for Mapper<D> {
 #[derive(Debug, Clone)]
 pub struct MapperResult<D: AsRef<Database>> {
     db: D,
-    q: CooMatrix<f32>,
-    pi: Vec<f32>,
+    q: CooMatrix<f64>,
+    pi: Vec<f64>,
     assigned_reads: Vec<usize>,
     mapped_reads: Vec<usize>,
 }
@@ -335,28 +335,28 @@ impl<D: AsRef<Database>> MapperResult<D> {
 
     /// Get a reference to the read probability matrix, `Q`.
     #[inline]
-    pub fn probabilities(&self) -> &CooMatrix<f32> {
+    pub fn probabilities(&self) -> &CooMatrix<f64> {
         &self.q
     }
 
     /// Get a reference to the read proportion vector, `π`.
     #[inline]
-    pub fn proportions(&self) -> &[f32] {
+    pub fn proportions(&self) -> &[f64] {
         &self.pi
     }
 
     /// Compute the bacterium frequency vector, `X`.
-    pub fn frequencies(&self) -> Vec<f32> {
+    pub fn frequencies(&self) -> Vec<f64> {
         let db = self.db.as_ref();
         let mut x = Vec::with_capacity(self.q.columns());
         for j in 0..self.q.columns() {
             if db.amplified[j] > 0 {
-                x.push(self.pi[j] / db.amplified[j] as f32);
+                x.push(self.pi[j] / db.amplified[j] as f64);
             } else {
                 x.push(0.0);
             }
         }
-        let tot = x.iter().sum::<f32>();
+        let tot = x.iter().sum::<f64>();
         if tot > 0.0 {
             for j in 0..self.q.columns() {
                 x[j] /= tot;
@@ -390,7 +390,7 @@ impl<D: AsRef<Database>> MapperResult<D> {
             }
         }
         for j in 0..self.q.columns() {
-            self.pi[j] *= up[j] / self.q.rows() as f32;
+            self.pi[j] *= up[j] / self.q.rows() as f64;
         }
     }
 }
