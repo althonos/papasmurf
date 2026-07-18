@@ -262,4 +262,29 @@ mod test {
         assert_eq!(csr.col_index, vec![0, 1, 1, 3, 2, 3, 4, 5]);
         assert_eq!(csr.row_index, vec![0, 2, 4, 7, 8]);
     }
+
+    #[test]
+    fn coo_coo_add() {
+        let mut coo_matrix = CooMatrix::<u8>::new(4, 6);
+        coo_matrix.insert(0, 0, 10);
+        coo_matrix.insert(0, 1, 20);
+        coo_matrix.insert(1, 1, 30);
+        coo_matrix.insert(1, 3, 40);
+        coo_matrix.insert(2, 2, 50);
+        coo_matrix.insert(2, 3, 60);
+        coo_matrix.insert(2, 4, 70);
+        coo_matrix.insert(3, 5, 80);
+
+        let c2 = coo_matrix.clone() + &coo_matrix;
+        let mut nz = c2.non_zero_elements();
+
+        assert_eq!(nz.next(), Some((0, 0, &20)));
+        assert_eq!(nz.next(), Some((0, 1, &40)));
+        assert_eq!(nz.next(), Some((1, 1, &60)));
+        assert_eq!(nz.next(), Some((1, 3, &80)));
+        assert_eq!(nz.next(), Some((2, 2, &100)));
+        assert_eq!(nz.next(), Some((2, 3, &120)));
+        assert_eq!(nz.next(), Some((2, 4, &140)));
+        assert_eq!(nz.next(), Some((3, 5, &160)));
+    }
 }
