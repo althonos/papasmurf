@@ -119,9 +119,13 @@ impl<T> MatrixDimensions for CooMatrix<T> {
     }
 }
 
-impl<T: Add<Output = T> + Clone + Default + PartialEq> Add for CooMatrix<T> {
+impl<T, U> Add<&CooMatrix<U>> for CooMatrix<T>
+where
+    T: Add<Output = T> + Clone + Default + PartialEq,
+    U: Into<T> + Clone,
+{
     type Output = CooMatrix<T>;
-    fn add(self, rhs: Self) -> Self {
+    fn add(self, rhs: &CooMatrix<U>) -> Self {
         assert_eq!(self.rows, rhs.rows);
         assert_eq!(self.cols, rhs.cols);
 
@@ -144,13 +148,13 @@ impl<T: Add<Output = T> + Clone + Default + PartialEq> Add for CooMatrix<T> {
                     x += 1;
                 }
                 Ordering::Greater => {
-                    out.insert(i2, j2, d2.clone());
+                    out.insert(i2, j2, d2.clone().into());
                     y += 1;
                 }
                 Ordering::Equal => {
-                    let d = d1.clone() + d2.clone();
+                    let d = d1.clone() + d2.clone().into();
                     if d != zero {
-                        out.insert(i1, j1, d1.clone() + d2.clone());
+                        out.insert(i1, j1, d1.clone() + d2.clone().into());
                     }
                     x += 1;
                     y += 1;
@@ -167,11 +171,22 @@ impl<T: Add<Output = T> + Clone + Default + PartialEq> Add for CooMatrix<T> {
         while y < rhs.data.len() {
             out.i.push(rhs.i[y]);
             out.j.push(rhs.j[y]);
-            out.data.push(rhs.data[y].clone());
+            out.data.push(rhs.data[y].clone().into());
             y += 1;
         }
 
         out
+    }
+}
+
+impl<T, U> Add<CooMatrix<U>> for CooMatrix<T>
+where
+    T: Add<Output = T> + Clone + Default + PartialEq,
+    U: Into<T> + Clone,
+{
+    type Output = CooMatrix<T>;
+    fn add(self, rhs: CooMatrix<U>) -> Self::Output {
+        self.add(&rhs)
     }
 }
 

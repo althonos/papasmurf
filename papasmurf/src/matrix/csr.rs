@@ -1,3 +1,4 @@
+use std::clone;
 use std::iter::FusedIterator;
 use std::ops::Add;
 use std::ops::AddAssign;
@@ -73,9 +74,13 @@ impl<T: Clone> CsrMatrix<T> {
     }
 }
 
-impl<T: Add<Output = T> + PartialEq + Clone + Default> Add<&CsrMatrix<T>> for CsrMatrix<T> {
+impl<T, U> Add<&CsrMatrix<U>> for CsrMatrix<T>
+where
+    T: Add<Output = T> + PartialEq + Clone + Default,
+    U: Clone + Into<T>,
+{
     type Output = CooMatrix<T>;
-    fn add(self, rhs: &CsrMatrix<T>) -> Self::Output {
+    fn add(self, rhs: &CsrMatrix<U>) -> Self::Output {
         assert_eq!(self.rows(), rhs.rows());
         assert_eq!(self.columns(), rhs.columns());
 
@@ -120,9 +125,13 @@ impl<T: Add<Output = T> + PartialEq + Clone + Default> Add<&CsrMatrix<T>> for Cs
     }
 }
 
-impl<T: Add<Output = T> + PartialEq + Clone + Default> Add<CsrMatrix<T>> for CsrMatrix<T> {
+impl<T, U> Add<CsrMatrix<U>> for CsrMatrix<T>
+where
+    T: Add<Output = T> + PartialEq + Clone + Default,
+    U: Into<T> + Clone,
+{
     type Output = CooMatrix<T>;
-    fn add(self, rhs: CsrMatrix<T>) -> Self::Output {
+    fn add(self, rhs: CsrMatrix<U>) -> Self::Output {
         self.add(&rhs)
     }
 }
@@ -138,11 +147,13 @@ impl<T: Add<Output = T> + PartialEq + Clone + Default> Add<CsrMatrix<T>> for Csr
 ///   Hochschulschrift, Institut für Theoretische Informatik (ITI),
 ///   Karlsruher Institut für Technologie (December 2014).
 ///   <https://doi.org/10.5445/IR/1000128898>.
-impl<T: AddAssign + Mul<Output = T> + PartialEq + Clone + Default> Dot<&CsrMatrix<T>>
-    for CsrMatrix<T>
+impl<T, U> Dot<&CsrMatrix<U>> for CsrMatrix<T>
+where
+    T: AddAssign + Mul<Output = T> + PartialEq + Clone + Default,
+    U: Into<T> + Clone + Default,
 {
     type Output = CsrMatrix<T>;
-    fn dot(self, rhs: &CsrMatrix<T>) -> CsrMatrix<T> {
+    fn dot(self, rhs: &CsrMatrix<U>) -> CsrMatrix<T> {
         assert_eq!(self.columns(), rhs.rows());
 
         let mut out = CsrMatrix::new(self.rows(), rhs.columns());
@@ -169,9 +180,9 @@ impl<T: AddAssign + Mul<Output = T> + PartialEq + Clone + Default> Dot<&CsrMatri
                         out.col_index.push(k);
                         ip += 1;
                         xb[k] = i;
-                        x[k] = self.data[jp].clone() * rhs.data[kp].clone();
+                        x[k] = self.data[jp].clone() * rhs.data[kp].clone().into();
                     } else {
-                        x[k] += self.data[jp].clone() * rhs.data[kp].clone();
+                        x[k] += self.data[jp].clone() * rhs.data[kp].clone().into();
                     }
                 }
             }
@@ -207,11 +218,13 @@ impl<T: AddAssign + Mul<Output = T> + PartialEq + Clone + Default> Dot<&CsrMatri
     }
 }
 
-impl<T: AddAssign + Mul<Output = T> + PartialEq + Clone + Default> Dot<CsrMatrix<T>>
-    for CsrMatrix<T>
+impl<T, U> Dot<CsrMatrix<U>> for CsrMatrix<T>
+where
+    T: AddAssign + Mul<Output = T> + PartialEq + Clone + Default,
+    U: Into<T> + Clone + Default,
 {
     type Output = CsrMatrix<T>;
-    fn dot(self, rhs: CsrMatrix<T>) -> CsrMatrix<T> {
+    fn dot(self, rhs: CsrMatrix<U>) -> CsrMatrix<T> {
         self.dot(&rhs)
     }
 }
