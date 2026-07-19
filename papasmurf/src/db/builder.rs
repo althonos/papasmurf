@@ -1,6 +1,8 @@
+use std::backtrace;
 use std::collections::HashSet;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
+use std::sync::Arc;
 use std::sync::RwLock;
 
 use lightmotif::abc::Dna;
@@ -31,6 +33,8 @@ use super::UnindexedRegion;
 /// deduplicated when the builder is transformed into a fully-indexed database.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 struct Sketch {
+    /// The index j of the bacterium in the M_h,j matrix.
+    pub bacterium: usize,
     /// The name of the reference bacterium this sketch originates from.
     pub name: Rc<str>,
     /// The forward and backward k-mers extracted from the reference sequence.
@@ -172,16 +176,17 @@ impl Builder {
         // Create a lightmotif pipeline to search for the primer.
         // let mut scores = lightmotif::scores::StripedScores::<f32, _>::empty();
         // Encode the input sequence
-        let mut striped = match self.pipeline.encode(&sequence[..sequence.len() - self.k]) {
-            Ok(encoded) => self.pipeline.stripe(encoded),
-            Err(_) => return Err(Error::InvalidDna),
-        };
-        if let Some(&n) = self.largest_primer.as_ref() {
-            striped.configure_wrap(n);
-        }
+        // let mut striped = match self.pipeline.encode(&sequence[..sequence.len() - self.k]) {
+        //     Ok(encoded) => self.pipeline.stripe(encoded),
+        //     Err(_) => return Err(Error::InvalidDna),
+        // };
+        // if let Some(&n) = self.largest_primer.as_ref() {
+        //     striped.configure_wrap(n);
+        // }
 
         let mut name_rc: Option<Rc<str>> = None;
         let mut amplified = 0;
+        let mut j = None; // index of the current bacterium
 
         for (region, primer) in self.primers.iter().enumerate() {
             let plen = primer.forward.len();
@@ -211,7 +216,8 @@ impl Builder {
                 continue;
             }
 
-            // Extract and intern the k-mer
+            // Extract and intern the k-mer (i.e. the pair formed by the forward
+            // and reverse fragment)
             let fwd_kmer = self
                 .interner
                 .intern(&sequence[fwd_pos + plen..fwd_pos + plen + self.k]);
@@ -219,12 +225,23 @@ impl Builder {
                 .interner
                 .intern(&reverse_complement(&sequence[bwd_pos - self.k..bwd_pos])?);
 
+            // Assign a new index to this bacterium if needed
+            let bacterium = match j {
+                Some(x) => x,
+                None => {
+                    let x = self.references.fetch_add(1, Ordering::Relaxed);
+                    j = Some(x);
+                    x
+                }
+            };
+
             // Add the amplified k-mer to the current region.
             if self.sketches[region]
                 .write()
                 .expect("lock was poisoned")
                 .insert(Sketch {
                     // primer: Paired::new(fwd_rc, bwd_rc),
+                    bacterium,
                     kmer: Paired::new(fwd_kmer, bwd_kmer),
                     name: name_rc.get_or_insert_with(|| name.as_ref().into()).clone(),
                 })
@@ -233,38 +250,39 @@ impl Builder {
             }
         }
 
-        if amplified > 0 {
-            self.references.fetch_add(1, Ordering::Relaxed);
-        }
-
         Ok(amplified)
     }
 
     /// Build the final database.
     pub fn to_database(&self) -> Database {
+        // Count total number of references added to the database so far.
+        let nbacterium = self.references.load(Ordering::Relaxed);
+
+        // Get all references
         let sketches_ref = self
             .sketches
             .iter()
             .map(|s| s.read().expect("lock was poisoned"))
             .collect::<Vec<_>>();
 
-        // Extract the unique names of all the references stored so far.
-        let names = sketches_ref
-            .iter()
-            .flat_map(|entries| entries.iter().map(|kmer| &kmer.name))
-            .cloned()
-            .collect::<OrderedSet<_>>();
+        // Extract the names of all the references stored so far.
+        let mut names = vec![Arc::from(""); nbacterium];
+        for sketches in sketches_ref.iter() {
+            for sketch in sketches.iter() {
+                names[sketch.bacterium] = sketch.name.clone();
+            }
+        }
 
         // Count how many regions were amplified for each reference.
-        let mut amplified = vec![0; names.len()];
-        for kmer in sketches_ref.iter().map(|v| v.iter()).flatten() {
-            amplified[names[&kmer.name]] += 1;
+        let mut amplified = vec![0; nbacterium];
+        for sketch in sketches_ref.iter().map(|v| v.iter()).flatten() {
+            amplified[sketch.bacterium] += 1;
         }
 
         // Group kmers for individual regions
         let mut regions = Vec::with_capacity(self.primers.len());
         for (primer, sketches) in self.primers.iter().zip(sketches_ref.iter()) {
-            // Extract unique kmers
+            // Extract (index) unique kmers
             let unique = sketches
                 .iter()
                 .map(|sketch| &sketch.kmer)
@@ -272,7 +290,7 @@ impl Builder {
                 .collect::<Paired<HashSet<_>>>()
                 .map(OrderedSet::from);
 
-            // Extract unique kmer pairs
+            // Extract (index) unique kmer pairs
             let unique_pairs: OrderedSet<Paired<usize>> = sketches
                 .iter()
                 .map(|sketch| &sketch.kmer)
@@ -286,9 +304,9 @@ impl Builder {
                 .into();
 
             // Build M_hj matrix
-            let mut matrix = DokMatrix::new(unique_pairs.len(), names.len());
+            let mut matrix = DokMatrix::new(unique_pairs.len(), nbacterium);
             for sketch in sketches.iter() {
-                let j = names[&sketch.name];
+                let j = sketch.bacterium;
                 let h = unique_pairs[&Paired::new(
                     unique.forward[&sketch.kmer.forward],
                     unique.backward[&sketch.kmer.backward],

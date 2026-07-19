@@ -109,7 +109,7 @@ pub struct Database {
     /// The regions this database contains.
     regions: Vec<Region>,
     /// The identifiers of the individual references in the database.
-    names: OrderedSet<Rc<str>>,
+    names: Vec<Rc<str>>,
     /// The number of k-mers extracted from each database reference (R vector).
     amplified: Vec<u8>,
 }
