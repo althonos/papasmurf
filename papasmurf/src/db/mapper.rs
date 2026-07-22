@@ -177,17 +177,14 @@ impl<D: AsRef<Database>> Mapper<D> {
         // Keep count of the number of reads assigned to each region
         self.assigned_reads[r].fetch_add(1, Ordering::Relaxed);
 
-        // Add a new row to the E_i,h matrices
-        let i = self.reads.fetch_add(1, Ordering::Relaxed);
-
         // Skip if primers mismatch the reads
         if primer_mismatches.forward > self.primer_mismatches
             || primer_mismatches.backward > self.primer_mismatches
         {
-            println!(
-                "discarding: primer mismatch fwd={} bwd={} (max={})",
-                primer_mismatches.forward, primer_mismatches.backward, self.primer_mismatches
-            );
+            //println!(
+            //    "discarding: primer mismatch fwd={} bwd={} (max={})",
+            //    primer_mismatches.forward, primer_mismatches.backward, self.primer_mismatches
+            //);
             return Ok(false);
         }
 
@@ -202,13 +199,13 @@ impl<D: AsRef<Database>> Mapper<D> {
         if kmer.forward.len() > self.kmer_length {
             kmer.forward = &kmer.forward[..self.kmer_length];
         } else if kmer.forward.len() < self.kmer_length && !self.partial_hits {
-            println!("discarding: partial forward kmer");
+            //println!("discarding: partial forward kmer");
             return Ok(false);
         }
         if kmer.backward.len() > self.kmer_length {
             kmer.backward = &kmer.backward[..self.kmer_length];
         } else if kmer.backward.len() < self.kmer_length && !self.partial_hits {
-            println!("discarding: partial reverse kmer");
+            //println!("discarding: partial reverse kmer");
             return Ok(false);
         }
 
@@ -220,6 +217,8 @@ impl<D: AsRef<Database>> Mapper<D> {
 
         // Record the read if it matches any database kmer
         let mut mapped = false;
+        let mut index = None;
+
         for (h, pair) in region.unique_pairs.iter().enumerate() {
             let ne =
                 mismatch.forward[pair.forward] as usize + mismatch.backward[pair.backward] as usize;
@@ -227,7 +226,17 @@ impl<D: AsRef<Database>> Mapper<D> {
                 let l = kmer.forward.len() + kmer.backward.len();
                 let e = (self.error_probability / 3.0).powi(ne as i32)
                     * (1.0 - self.error_probability).powi((l - ne) as i32);
+                //println!("h={} ne={} e={}", h, ne, e);
                 if e > 0.0 {
+                    let i = match index {
+                        Some(i) => i,
+                        None => {
+                            let i = self.reads.fetch_add(1, Ordering::Relaxed);
+                            index = Some(i);
+                            i
+                        }
+                    };
+
                     self.expected[r]
                         .write()
                         .expect("lock was poisoned")
@@ -267,6 +276,14 @@ impl<D: AsRef<Database>> Mapper<D> {
             q_matrix = q_matrix + q.into_coo();
         }
 
+        // Compute initial read proportion vector pi as the sum of mapped reads
+        let n = self
+            .mapped_reads
+            .iter()
+            .map(|x| x.load(Ordering::Relaxed))
+            .sum::<usize>();
+        let pi = vec![1.0 / n as f64; q_matrix.columns()];
+
         // Recover counts by region
         let assigned_reads = self
             .assigned_reads
@@ -281,8 +298,8 @@ impl<D: AsRef<Database>> Mapper<D> {
 
         MapperResult {
             db: self.db,
-            pi: vec![1.0 / q_matrix.columns() as f64; q_matrix.columns()],
             q: q_matrix,
+            pi,
             assigned_reads,
             mapped_reads,
         }
@@ -348,21 +365,23 @@ impl<D: AsRef<Database>> MapperResult<D> {
     /// Compute the bacterium frequency vector, `X`.
     pub fn frequencies(&self) -> Vec<f64> {
         let db = self.db.as_ref();
-        let mut x = Vec::with_capacity(self.q.columns());
-        for j in 0..self.q.columns() {
-            if db.amplified[j] > 0 {
-                x.push(self.pi[j] / db.amplified[j] as f64);
-            } else {
-                x.push(0.0);
-            }
+
+        // Compute frequency by normalizing by number of regions
+        let mut freq = self
+            .pi
+            .iter()
+            .zip(&db.amplified)
+            .map(|(pi, r)| if *r > 0 { pi / *r as f64 } else { 0.0 })
+            .map(|f| if f < 1e-10 { 0.0 } else { f })
+            .collect::<Vec<_>>();
+
+        // Renormalize
+        let tot = freq.iter().sum::<f64>();
+        for x in freq.iter_mut() {
+            *x /= tot;
         }
-        let tot = x.iter().sum::<f64>();
-        if tot > 0.0 {
-            for j in 0..self.q.columns() {
-                x[j] /= tot;
-            }
-        }
-        x
+
+        freq
     }
 
     /// Compute the number of reads mapped to each bacterium.
@@ -375,23 +394,51 @@ impl<D: AsRef<Database>> MapperResult<D> {
     }
 
     /// Run one iteration of the read proportion estimation procedure.
-    pub fn refine(&mut self) {
+    ///
+    /// Returns the L1 error.
+    pub fn refine(&mut self) -> f64 {
         let _db = self.db.as_ref();
-        let mut up = vec![0.0; self.q.columns()];
+        let n = self.mapped_reads.iter().sum::<usize>();
+
+        // Compute d_i = sum_j Q_i,j p_j for each i
         let mut dens = vec![0.0; self.q.rows()];
-        dens.fill(0.0);
         for (i, j, x) in self.q.non_zero_elements() {
             dens[i] += x * self.pi[j];
         }
-        up.fill(0.0);
+
+        // Compute u_j = sum_i Q_i,j / d_i for each j
+        let mut up = vec![0.0; self.q.columns()];
         for (i, j, x) in self.q.non_zero_elements() {
-            if dens[i] > 0.0 {
-                up[j] += *x / dens[i]
+            up[j] += *x / (dens[i] + f64::EPSILON);
+        }
+
+        // Compute update factor
+        let mut factor = vec![0.0; self.q.columns()];
+        for j in 0..self.q.columns() {
+            factor[j] = up[j] / n as f64;
+        }
+
+        // Compute L1 error
+        let l1 = factor
+            .iter()
+            .zip(&self.pi)
+            .map(|(fact, prop)| (1.0f64 - fact).abs() * prop)
+            .sum::<f64>();
+
+        // Update unknown read proportion vector
+        for j in 0..self.q.columns() {
+            self.pi[j] *= factor[j];
+        }
+
+        // Remove bacteria of low frequency
+        for x in self.pi.iter_mut() {
+            if *x < 1e-10 {
+                *x = 0.0;
             }
         }
-        for j in 0..self.q.columns() {
-            self.pi[j] *= up[j] / self.q.rows() as f64;
-        }
+
+        // Return L1 error
+        l1
     }
 }
 
