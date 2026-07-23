@@ -53,3 +53,8 @@ pub trait Dot<Rhs = Self> {
     /// Compute the dot-product between this matrix and another.
     fn dot(self, rhs: Rhs) -> Self::Output;
 }
+
+/// Vertical concatenation for matrices.
+pub trait VerticalStack<Rhs = Self> {
+    fn vstack(&mut self, other: Rhs);
+}

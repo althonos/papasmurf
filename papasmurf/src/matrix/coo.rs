@@ -9,6 +9,7 @@ use serde::Serialize;
 use super::csr::CsrMatrix;
 use super::MatrixDimensions;
 use super::NonZeroElements;
+use super::VerticalStack;
 
 // --- CooMatrix ---------------------------------------------------------------
 
@@ -236,6 +237,27 @@ impl<'m, T: 'm> NonZeroElements<'m, T> for CooMatrix<T> {
             pos: 0..self.data.len(),
             matrix: self,
         }
+    }
+}
+
+impl<T> VerticalStack<&CooMatrix<T>> for CooMatrix<T>
+where
+    T: Clone,
+{
+    fn vstack(&mut self, other: &CooMatrix<T>) {
+        let offset = self.rows();
+        for (i, j, x) in other.non_zero_elements() {
+            self.insert(i + offset, j, x.clone());
+        }
+    }
+}
+
+impl<T> VerticalStack<CooMatrix<T>> for CooMatrix<T>
+where
+    T: Clone,
+{
+    fn vstack(&mut self, other: CooMatrix<T>) {
+        self.vstack(&other);
     }
 }
 
