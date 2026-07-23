@@ -413,24 +413,22 @@ impl<D: AsRef<Database>> MapperResult<D> {
     /// Returns the L1 error.
     pub fn refine(&mut self) -> f64 {
         let _db = self.db.as_ref();
-        let n = self.mapped_reads.iter().sum::<usize>();
 
-        // Compute d_i = sum_j Q_i,j p_j for each i
-        let mut dens = vec![0.0; self.q.rows()];
+        // Estimate theta
+        let mut theta = vec![0.0; self.q.rows()];
         for (i, j, x) in self.q.non_zero_elements() {
-            dens[i] += x * self.pi[j];
+            theta[i] += *x * self.pi[j];
         }
 
-        // Compute u_j = sum_i Q_i,j / d_i for each j
-        let mut up = vec![0.0; self.q.columns()];
-        for (i, j, x) in self.q.non_zero_elements() {
-            up[j] += *x / (dens[i] + f64::EPSILON);
+        // Reweight the counts (reuse theta buffer)
+        for i in 0..self.q.rows() {
+            theta[i] = self.y[i] / (theta[i] + f64::EPSILON);
         }
 
-        // Compute update factor
+        // Update the refinement factor
         let mut factor = vec![0.0; self.q.columns()];
-        for j in 0..self.q.columns() {
-            factor[j] = up[j] / n as f64;
+        for (i, j, x) in self.q.non_zero_elements() {
+            factor[j] += *x * theta[i];
         }
 
         // Compute L1 error
