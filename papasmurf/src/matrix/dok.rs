@@ -152,6 +152,9 @@ impl<'mx, T> FusedIterator for NonZeroIter<'mx, T> {}
 
 impl<'m, T: 'm> NonZeroElements<'m, T> for DokMatrix<T> {
     type Iter = NonZeroIter<'m, T>;
+    fn nnz(&'m self) -> usize {
+        self.data.len()
+    }
     fn non_zero_elements(&'m self) -> Self::Iter {
         NonZeroIter {
             it: self.data.iter(),

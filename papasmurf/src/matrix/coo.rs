@@ -1,3 +1,4 @@
+use std::assert_eq;
 use std::cmp::Ordering;
 use std::iter::FusedIterator;
 use std::ops::Add;
@@ -203,6 +204,28 @@ impl<T> From<CooMatrix<T>> for CsrMatrix<T> {
     }
 }
 
+impl<T> VerticalStack<&CooMatrix<T>> for CooMatrix<T>
+where
+    T: Clone,
+{
+    fn vstack(&mut self, other: &CooMatrix<T>) {
+        assert_eq!(self.columns(), other.columns());
+        let offset = self.rows();
+        for (i, j, x) in other.non_zero_elements() {
+            self.insert(i + offset, j, x.clone());
+        }
+    }
+}
+
+impl<T> VerticalStack<CooMatrix<T>> for CooMatrix<T>
+where
+    T: Clone,
+{
+    fn vstack(&mut self, other: CooMatrix<T>) {
+        self.vstack(&other);
+    }
+}
+
 // --- NonZeroIter -------------------------------------------------------------
 
 pub struct NonZeroIter<'m, T> {
@@ -232,32 +255,14 @@ impl<'mx, T> FusedIterator for NonZeroIter<'mx, T> {}
 
 impl<'m, T: 'm> NonZeroElements<'m, T> for CooMatrix<T> {
     type Iter = NonZeroIter<'m, T>;
+    fn nnz(&'m self) -> usize {
+        self.data.len()
+    }
     fn non_zero_elements(&'m self) -> Self::Iter {
         NonZeroIter {
             pos: 0..self.data.len(),
             matrix: self,
         }
-    }
-}
-
-impl<T> VerticalStack<&CooMatrix<T>> for CooMatrix<T>
-where
-    T: Clone,
-{
-    fn vstack(&mut self, other: &CooMatrix<T>) {
-        let offset = self.rows();
-        for (i, j, x) in other.non_zero_elements() {
-            self.insert(i + offset, j, x.clone());
-        }
-    }
-}
-
-impl<T> VerticalStack<CooMatrix<T>> for CooMatrix<T>
-where
-    T: Clone,
-{
-    fn vstack(&mut self, other: CooMatrix<T>) {
-        self.vstack(&other);
     }
 }
 

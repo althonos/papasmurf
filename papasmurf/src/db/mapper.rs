@@ -6,10 +6,12 @@ use std::sync::RwLock;
 use crate::db::Database;
 use crate::errors::Error;
 use crate::matrix::CooMatrix;
+use crate::matrix::CsrMatrix;
 use crate::matrix::DokMatrix;
 use crate::matrix::Dot;
 use crate::matrix::MatrixDimensions;
 use crate::matrix::NonZeroElements;
+use crate::matrix::VerticalStack;
 use crate::primer::Primer;
 use crate::utils::Paired;
 
@@ -265,7 +267,7 @@ impl<D: AsRef<Database>> Mapper<D> {
         let reads = self.reads.load(Ordering::Relaxed);
 
         // Compute the Q_i,j matrix
-        let mut q_matrix = CooMatrix::<f64>::new(reads, db.names.len());
+        let mut q_matrix = CsrMatrix::<f64>::new(0, db.names.len());
         for (region, expected) in db.regions.iter().zip(self.expected) {
             let e = DokMatrix::with_data(
                 reads,
@@ -273,7 +275,7 @@ impl<D: AsRef<Database>> Mapper<D> {
                 expected.into_inner().unwrap(),
             );
             let q = e.to_csr().dot(&region.matrix);
-            q_matrix = q_matrix + q.into_coo();
+            q_matrix.vstack(q);
         }
 
         // Compute initial read proportion vector pi as the sum of mapped reads
@@ -298,7 +300,7 @@ impl<D: AsRef<Database>> Mapper<D> {
 
         MapperResult {
             db: self.db,
-            q: q_matrix,
+            q: q_matrix.to_coo(),
             pi,
             assigned_reads,
             mapped_reads,

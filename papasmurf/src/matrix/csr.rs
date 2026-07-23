@@ -11,6 +11,7 @@ use super::coo::CooMatrix;
 use super::Dot;
 use super::MatrixDimensions;
 use super::NonZeroElements;
+use super::VerticalStack;
 
 // --- CsrMatrix ---------------------------------------------------------------
 
@@ -264,6 +265,34 @@ impl<T> From<CsrMatrix<T>> for CooMatrix<T> {
     }
 }
 
+impl<T> VerticalStack<CsrMatrix<T>> for CsrMatrix<T>
+where
+    T: Clone,
+{
+    fn vstack(&mut self, other: CsrMatrix<T>) {
+        self.vstack(&other);
+    }
+}
+
+impl<T> VerticalStack<&CsrMatrix<T>> for CsrMatrix<T>
+where
+    T: Clone,
+{
+    fn vstack(&mut self, other: &CsrMatrix<T>) {
+        assert_eq!(self.columns(), other.columns());
+
+        let offset = self.rows();
+
+        for i in 0..other.rows() {
+            let nelems = other.row_index[i + 1] - other.row_index[i];
+            self.row_index.push(self.row_index[offset + i] + nelems);
+        }
+
+        self.col_index.extend_from_slice(&other.col_index);
+        self.data.extend_from_slice(&other.data);
+    }
+}
+
 // --- NonZeroIter -------------------------------------------------------------
 
 pub struct NonZeroIter<'m, T> {
@@ -303,6 +332,9 @@ impl<'mx, T> FusedIterator for NonZeroIter<'mx, T> {}
 
 impl<'m, T: 'm> NonZeroElements<'m, T> for CsrMatrix<T> {
     type Iter = NonZeroIter<'m, T>;
+    fn nnz(&'m self) -> usize {
+        self.data.len()
+    }
     fn non_zero_elements(&'m self) -> Self::Iter {
         NonZeroIter {
             row: 0,
@@ -347,6 +379,30 @@ mod test {
         assert_eq!(it.next(), Some((0, 1, &2)));
         assert_eq!(it.next(), Some((1, 0, &3)));
         assert_eq!(it.next(), Some((1, 1, &6)));
+        assert_eq!(it.next(), None);
+    }
+
+    #[test]
+    fn csr_vstack() {
+        let mut a = DokMatrix::<u8>::new(2, 2);
+        a.insert(0, 0, 1);
+        a.insert(0, 1, 2);
+        a.insert(1, 0, 3);
+
+        let mut c1 = a.to_csr();
+        let mut c2 = a.to_csr();
+        c1.vstack(&c2);
+
+        assert_eq!(c1.rows(), 4);
+        assert_eq!(c1.columns(), 2);
+
+        let mut it = c1.non_zero_elements();
+        assert_eq!(it.next(), Some((0, 0, &1)));
+        assert_eq!(it.next(), Some((0, 1, &2)));
+        assert_eq!(it.next(), Some((1, 0, &3)));
+        assert_eq!(it.next(), Some((2, 0, &1)));
+        assert_eq!(it.next(), Some((2, 1, &2)));
+        assert_eq!(it.next(), Some((3, 0, &3)));
         assert_eq!(it.next(), None);
     }
 
