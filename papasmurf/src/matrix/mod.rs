@@ -47,6 +47,11 @@ pub trait NonZeroElements<'m, T: 'm> {
     }
 }
 
+pub trait NonZeroElementsMut<'m, T: 'm>: NonZeroElements<'m, T> {
+    type IterMut: Iterator<Item = (usize, usize, &'m mut T)> + ExactSizeIterator;
+    fn non_zero_elements_mut(&'m mut self) -> Self::IterMut;
+}
+
 /// The dot-product operator for matrices.
 pub trait Dot<Rhs = Self> {
     type Output;

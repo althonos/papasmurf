@@ -11,6 +11,7 @@ use super::coo::CooMatrix;
 use super::Dot;
 use super::MatrixDimensions;
 use super::NonZeroElements;
+use super::NonZeroElementsMut;
 use super::VerticalStack;
 
 // --- CsrMatrix ---------------------------------------------------------------
@@ -337,6 +338,53 @@ impl<'m, T: 'm> NonZeroElements<'m, T> for CsrMatrix<T> {
     }
     fn non_zero_elements(&'m self) -> Self::Iter {
         NonZeroIter {
+            row: 0,
+            ptr: 0,
+            matrix: self,
+        }
+    }
+}
+
+// --- NonZeroIterMut ----------------------------------------------------------
+
+pub struct NonZeroIterMut<'m, T> {
+    matrix: &'m mut CsrMatrix<T>,
+    row: usize,
+    ptr: usize,
+}
+
+impl<'mx, T> Iterator for NonZeroIterMut<'mx, T> {
+    type Item = (usize, usize, &'mx mut T);
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.ptr >= self.matrix.data.len() {
+            return None;
+        }
+        while self.ptr >= self.matrix.row_index[self.row + 1] {
+            if self.row + 1 > self.matrix.row_index.len() {
+                return None;
+            }
+            self.row += 1;
+        }
+        self.ptr += 1;
+
+        Some((self.row, self.matrix.col_index[self.ptr - 1], unsafe {
+            std::mem::transmute(&mut self.matrix.data[self.ptr - 1])
+        }))
+    }
+}
+
+impl<'mx, T> ExactSizeIterator for NonZeroIterMut<'mx, T> {
+    fn len(&self) -> usize {
+        self.matrix.data.len() - self.ptr
+    }
+}
+
+impl<'mx, T> FusedIterator for NonZeroIterMut<'mx, T> {}
+
+impl<'m, T: 'm> NonZeroElementsMut<'m, T> for CsrMatrix<T> {
+    type IterMut = NonZeroIterMut<'m, T>;
+    fn non_zero_elements_mut(&'m mut self) -> Self::IterMut {
+        NonZeroIterMut {
             row: 0,
             ptr: 0,
             matrix: self,

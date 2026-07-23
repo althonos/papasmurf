@@ -11,6 +11,7 @@ use crate::matrix::DokMatrix;
 use crate::matrix::Dot;
 use crate::matrix::MatrixDimensions;
 use crate::matrix::NonZeroElements;
+use crate::matrix::NonZeroElementsMut;
 use crate::matrix::VerticalStack;
 use crate::primer::Primer;
 use crate::utils::Paired;
@@ -281,13 +282,20 @@ impl<D: AsRef<Database>> Mapper<D> {
             freq_vec.extend(std::iter::repeat(f as f64 / reads as f64).take(q.rows()));
         }
 
-        // Compute initial read proportion vector pi as the sum of mapped reads
-        let n = self
-            .mapped_reads
-            .iter()
-            .map(|x| x.load(Ordering::Relaxed))
-            .sum::<usize>();
-        let pi = vec![1.0 / n as f64; q_matrix.columns()];
+        // Normalize to regions probability (?)
+        for (_, j, x) in q_matrix.non_zero_elements_mut() {
+            *x = *x / db.amplified[j] as f64;
+        }
+
+        // Compute initial proportion vector
+        let mut pi = vec![0.0; q_matrix.columns()];
+        for (i, j, x) in q_matrix.non_zero_elements() {
+            pi[j] += *x * freq_vec[i];
+        }
+        let mut total = pi.iter().sum::<f64>();
+        for x in pi.iter_mut() {
+            *x /= total;
+        }
 
         // Recover counts by region
         let assigned_reads = self
@@ -304,6 +312,7 @@ impl<D: AsRef<Database>> Mapper<D> {
         MapperResult {
             db: self.db,
             q: q_matrix.to_coo(),
+            y: freq_vec,
             pi,
             assigned_reads,
             mapped_reads,
@@ -330,8 +339,9 @@ impl<D: AsRef<Database>> AsRef<Database> for Mapper<D> {
 #[derive(Debug, Clone)]
 pub struct MapperResult<D: AsRef<Database>> {
     db: D,
-    q: CooMatrix<f64>,
-    pi: Vec<f64>,
+    q: CooMatrix<f64>, // dim[i, j]
+    y: Vec<f64>,       // dim[i]
+    pi: Vec<f64>,      // dim[j]
     assigned_reads: Vec<usize>,
     mapped_reads: Vec<usize>,
 }
