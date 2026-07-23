@@ -455,14 +455,20 @@ impl MapperResult {
     }
 
     /// Run one or more iterations of the read proportion estimation procedure.
-    #[pyo3(signature = (n = 1))]
-    pub fn refine(&mut self, n: usize) -> PyResult<()> {
+    #[pyo3(signature = (n = 10000, tol = 5e-7))]
+    pub fn refine(&mut self, n: usize, tol: f64) -> PyResult<f64> {
         self.frequencies = None;
         self.proportions = None;
+
+        let mut err = f64::NAN;
         for _i in 0..n {
-            self.result.refine();
+            err = self.result.refine();
+            if err < tol {
+                break;
+            }
         }
-        Ok(())
+
+        Ok(err)
     }
 }
 
