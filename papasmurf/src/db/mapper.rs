@@ -266,16 +266,19 @@ impl<D: AsRef<Database>> Mapper<D> {
         let db = self.db.as_ref();
         let reads = self.reads.load(Ordering::Relaxed);
 
-        // Compute the Q_i,j matrix
+        // Compute the probability matrix Q_i,j and the frequency vector f_i
         let mut q_matrix = CsrMatrix::<f64>::new(0, db.names.len());
-        for (region, expected) in db.regions.iter().zip(self.expected) {
+        let mut freq_vec = Vec::<f64>::new();
+        for ((r, region), expected) in db.regions.iter().enumerate().zip(self.expected) {
             let e = DokMatrix::with_data(
                 reads,
                 region.unique_pairs.len(),
                 expected.into_inner().unwrap(),
             );
             let q = e.to_csr().dot(&region.matrix);
-            q_matrix.vstack(q);
+            q_matrix.vstack(&q);
+            let f = self.mapped_reads[r].load(Ordering::Relaxed);
+            freq_vec.extend(std::iter::repeat(f as f64 / reads as f64).take(q.rows()));
         }
 
         // Compute initial read proportion vector pi as the sum of mapped reads
