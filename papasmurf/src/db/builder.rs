@@ -1,3 +1,4 @@
+use std::assert_eq;
 use std::backtrace;
 use std::collections::HashSet;
 use std::sync::atomic::AtomicUsize;
@@ -15,6 +16,8 @@ use lightmotif::pli::Threshold;
 
 use crate::errors::Error;
 use crate::matrix::DokMatrix;
+use crate::matrix::NonZeroElements;
+use crate::matrix::NonZeroElementsMut;
 use crate::primer::Primer;
 use crate::seq::count_ambiguous;
 use crate::seq::reverse_complement;
@@ -311,9 +314,7 @@ impl Builder {
                     unique.forward[&sketch.kmer.forward],
                     unique.backward[&sketch.kmer.backward],
                 )];
-                if amplified[j] > 0 {
-                    matrix.insert(h, j, 1.0);
-                }
+                matrix.insert(h, j, 1.0 / (amplified[j] as f32 + f32::EPSILON));
             }
 
             let mut region_primer = primer.clone();
