@@ -32,11 +32,13 @@ use super::UnindexedRegion;
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 struct Sketch {
     /// The index j of the bacterium in the M_h,j matrix.
-    pub bacterium: usize,
+    bacterium: usize,
     /// The name of the reference bacterium this sketch originates from.
-    pub name: Rc<str>,
+    name: Rc<str>,
     /// The forward and backward k-mers extracted from the reference sequence.
-    pub kmer: Paired<Rc<str>>,
+    kmer: Paired<Rc<str>>,
+    /// The mismatches between the region primers and the reference sequence.
+    primer_mismatches: Paired<usize>,
 }
 
 /// A builder for incremental construction of a new database.
@@ -241,6 +243,7 @@ impl Builder {
                     // primer: Paired::new(fwd_rc, bwd_rc),
                     bacterium,
                     kmer: Paired::new(fwd_kmer, bwd_kmer),
+                    primer_mismatches: Paired::new(fwd_mm, bwd_mm),
                     name: name_rc.get_or_insert_with(|| name.as_ref().into()).clone(),
                 })
             {
@@ -301,6 +304,9 @@ impl Builder {
                 .collect::<HashSet<Paired<_>>>()
                 .into();
 
+            // Record which references match perfectly
+            let mut perfect_match = vec![0; nbacterium];
+
             // Build M_hj matrix
             let mut matrix = DokMatrix::new(unique_pairs.len(), nbacterium);
             for sketch in sketches.iter() {
@@ -310,6 +316,9 @@ impl Builder {
                     unique.backward[&sketch.kmer.backward],
                 )];
                 matrix.insert(h, j, 1.0 / (amplified[j] as f32 + f32::EPSILON));
+                if sketch.primer_mismatches.forward == 0 && sketch.primer_mismatches.backward == 0 {
+                    perfect_match[j] = 1;
+                }
             }
 
             let mut region_primer = primer.clone();
@@ -322,6 +331,7 @@ impl Builder {
                     unique_pairs,
                     matrix: matrix.to_csr(),
                     unique_kmers: unique,
+                    perfect_match,
                 }
                 .into(),
             )

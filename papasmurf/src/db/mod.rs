@@ -2,6 +2,8 @@ mod builder;
 mod kmers;
 mod mapper;
 
+use std::fs::Permissions;
+
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -27,6 +29,8 @@ struct UnindexedRegion {
     unique_kmers: Paired<OrderedSet<Rc<str>>>,
     /// A sparse matrix storing the k-mer pair for each database reference.
     matrix: CsrMatrix<f32>,
+    /// Indicates for each reference whether it matched the region primers without mismatches.
+    perfect_match: Vec<u8>,
 }
 
 impl From<UnindexedRegion> for Region {
@@ -41,10 +45,12 @@ impl From<UnindexedRegion> for Region {
         let block = region
             .unique_kmers
             .map(|kmers| Kmers::new(kmers.iter().map(|r| r.as_bytes())).unwrap());
+        let perfect_match = region.perfect_match.iter().map(|x| *x != 0).collect();
         Self {
             primer: region.primer,
             unique_pairs: region.unique_pairs,
             matrix: region.matrix,
+            perfect_match,
             block,
         }
     }
@@ -64,11 +70,13 @@ impl From<Region> for UnindexedRegion {
             }
             unique_kmers.into()
         });
+        let perfect_match = region.perfect_match.iter().map(|x| *x as u8).collect();
         Self {
             primer: region.primer,
             unique_pairs: region.unique_pairs,
             unique_kmers,
             matrix: region.matrix,
+            perfect_match,
         }
     }
 }
@@ -85,6 +93,8 @@ pub struct Region {
     block: Paired<Kmers>,
     /// A sparse matrix storing the k-mer pair for each database reference.
     matrix: CsrMatrix<f32>,
+    /// Indicates for each reference whether it matched the region primers without mismatches.
+    perfect_match: Vec<bool>,
 }
 
 impl Region {
