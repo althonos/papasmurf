@@ -165,75 +165,61 @@ impl<D: AsRef<Database>> Mapper<D> {
             return Ok(false);
         }
 
-        // Find the best matching primer and primer position
-        let (r, region, pos, primer_mismatches) = db
-            .regions
-            .iter()
-            .enumerate()
-            .map(|(r, region)| {
-                (
-                    r,
-                    region,
-                    self.scan_primer(&region.primer.forward, &read.forward),
-                    self.scan_primer(&region.primer.backward, &read.backward),
-                )
-            })
-            // Find region with the least
-            .min_by(|x, y| (x.2 .1 + x.3 .1).cmp(&(y.2 .1 + y.3 .1)))
-            .map(|x| {
-                (
-                    x.0,
-                    x.1,
-                    Paired::new(x.2 .0, x.3 .0),
-                    Paired::new(x.2 .1, x.3 .1),
-                )
-            })
-            .expect("regions cannot be empty, always a minimum to be found");
+        let mut mapped = false;
 
-        // Keep count of the number of reads assigned to each region
-        // self.assigned_reads[r].fetch_add(1, Ordering::Relaxed);
+        for (r, region) in db.regions.iter().enumerate() {
+            let hit_fwd = self.scan_primer(&region.primer.forward, &read.forward);
+            let hit_bwd = self.scan_primer(&region.primer.backward, &read.backward);
 
-        // Skip if primers mismatch the reads
-        if primer_mismatches.forward > self.primer_mismatches
-            || primer_mismatches.backward > self.primer_mismatches
-        {
-            // println!(
-            //    "discarding: primer mismatch fwd={} bwd={} (max={})",
-            //    primer_mismatches.forward, primer_mismatches.backward, self.primer_mismatches
-            // );
-            return Ok(false);
+            let primer_mismatches = Paired::new(hit_fwd.1, hit_bwd.1);
+            let pos = Paired::new(hit_fwd.0, hit_bwd.0);
+
+            // Skip if primers mismatch the reads
+            if primer_mismatches.forward > self.primer_mismatches
+                || primer_mismatches.backward > self.primer_mismatches
+            {
+                // println!(
+                //    "discarding: primer mismatch fwd={} bwd={} (max={})",
+                //    primer_mismatches.forward, primer_mismatches.backward, self.primer_mismatches
+                // );
+                // return Ok(false);
+                continue;
+            }
+
+            // Create the kmer pair
+            let mut kmer = Paired::new(
+                &read.forward[(pos.forward + region.primer.forward.len() as isize) as usize..],
+                &read.backward[(pos.backward + region.primer.backward.len() as isize) as usize..],
+            );
+
+            // Check that the kmer is long enough for the database regions or that
+            // partial mapping is enabled in the mapper.
+            if kmer.forward.len() > self.kmer_length {
+                kmer.forward = &kmer.forward[..self.kmer_length];
+            } else if kmer.forward.len() < self.kmer_length && !self.partial_hits {
+                // println!("discarding: partial forward kmer");
+                continue;
+            }
+            if kmer.backward.len() > self.kmer_length {
+                kmer.backward = &kmer.backward[..self.kmer_length];
+            } else if kmer.backward.len() < self.kmer_length && !self.partial_hits {
+                // println!("discarding: partial reverse kmer");
+                continue;
+            }
+
+            // Length is correct, record the read to compute frequencies
+            *self.reads[r]
+                .write()
+                .expect("lock was poisoned")
+                .entry(kmer.map(String::from))
+                .or_default() += 1;
+
+            // Read is mapped in (at least) one region
+            mapped = true;
         }
-
-        // Create the kmer pair
-        let mut kmer = Paired::new(
-            &read.forward[(pos.forward + region.primer.forward.len() as isize) as usize..],
-            &read.backward[(pos.backward + region.primer.backward.len() as isize) as usize..],
-        );
-
-        // Check that the kmer is long enough for the database regions or that
-        // partial mapping is enabled in the mapper.
-        if kmer.forward.len() > self.kmer_length {
-            kmer.forward = &kmer.forward[..self.kmer_length];
-        } else if kmer.forward.len() < self.kmer_length && !self.partial_hits {
-            // println!("discarding: partial forward kmer");
-            return Ok(false);
-        }
-        if kmer.backward.len() > self.kmer_length {
-            kmer.backward = &kmer.backward[..self.kmer_length];
-        } else if kmer.backward.len() < self.kmer_length && !self.partial_hits {
-            // println!("discarding: partial reverse kmer");
-            return Ok(false);
-        }
-
-        // Length is correct, record the read to compute frequencies
-        *self.reads[r]
-            .write()
-            .expect("lock was poisoned")
-            .entry(kmer.map(String::from))
-            .or_default() += 1;
 
         // All done for now, the heavy lifting will happen in `Mapper::finish`
-        Ok(true)
+        Ok(mapped)
     }
 
     /// Finish mapping and return the partial results.
