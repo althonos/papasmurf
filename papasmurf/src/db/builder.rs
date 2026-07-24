@@ -1,23 +1,18 @@
-use std::assert_eq;
-use std::backtrace;
 use std::collections::HashSet;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::sync::RwLock;
 
-use lightmotif::abc::Dna;
-use lightmotif::pli::dispatch::Dispatch;
-use lightmotif::pli::Encode;
-use lightmotif::pli::Pipeline;
-use lightmotif::pli::Score;
-use lightmotif::pli::Stripe;
-use lightmotif::pli::Threshold;
+// use lightmotif::abc::Dna;
+// use lightmotif::pli::dispatch::Dispatch;
+// use lightmotif::pli::Pipeline;
+// use lightmotif::pli::Score;
+// use lightmotif::pli::Stripe;
+// use lightmotif::pli::Threshold;
 
 use crate::errors::Error;
 use crate::matrix::DokMatrix;
-use crate::matrix::NonZeroElements;
-use crate::matrix::NonZeroElementsMut;
 use crate::primer::Primer;
 use crate::seq::count_ambiguous;
 use crate::seq::reverse_complement;
@@ -59,10 +54,10 @@ pub struct Builder {
     interner: Interner<str>,
     /// The number of references added to the database.
     references: AtomicUsize,
-    /// The lightmotif pipeline to run PSSM-related operations.
-    pipeline: Pipeline<Dna, Dispatch>,
-    /// The length of the largest primer, or `None`.
-    largest_primer: Option<usize>,
+    // /// The lightmotif pipeline to run PSSM-related operations.
+    // pipeline: Pipeline<Dna, Dispatch>,
+    // /// The length of the largest primer, or `None`.
+    // largest_primer: Option<usize>,
 }
 
 impl Builder {
@@ -82,11 +77,11 @@ impl Builder {
         }
 
         // Compute length of largest primer
-        let largest_primer = primers
-            .iter()
-            .flat_map(|pair| [pair.forward.profile(), pair.backward.profile()])
-            .map(|prof| prof.len())
-            .max();
+        // let largest_primer = primers
+        //     .iter()
+        //     .flat_map(|pair| [pair.forward.profile(), pair.backward.profile()])
+        //     .map(|prof| prof.len())
+        //     .max();
 
         Builder {
             primers,
@@ -95,8 +90,8 @@ impl Builder {
             k: 160,
             primer_mismatches: 2,
             references: AtomicUsize::new(0),
-            pipeline: Pipeline::dispatch(),
-            largest_primer,
+            // pipeline: Pipeline::dispatch(),
+            // largest_primer,
         }
     }
 

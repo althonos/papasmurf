@@ -10,6 +10,7 @@ use serde::Serialize;
 use super::csr::CsrMatrix;
 use super::MatrixDimensions;
 use super::NonZeroElements;
+use super::NonZeroElementsMut;
 use super::VerticalStack;
 
 // --- CooMatrix ---------------------------------------------------------------
@@ -260,6 +261,41 @@ impl<'m, T: 'm> NonZeroElements<'m, T> for CooMatrix<T> {
     }
     fn non_zero_elements(&'m self) -> Self::Iter {
         NonZeroIter {
+            pos: 0..self.data.len(),
+            matrix: self,
+        }
+    }
+}
+
+// --- NonZeroIterMut ----------------------------------------------------------
+
+pub struct NonZeroIterMut<'m, T> {
+    matrix: &'m mut CooMatrix<T>,
+    pos: Range<usize>,
+}
+
+impl<'mx, T> Iterator for NonZeroIterMut<'mx, T> {
+    type Item = (usize, usize, &'mx mut T);
+    fn next(&mut self) -> Option<Self::Item> {
+        let pos = self.pos.next()?;
+        Some((self.matrix.i[pos], self.matrix.j[pos], unsafe {
+            std::mem::transmute(&mut self.matrix.data[pos])
+        }))
+    }
+}
+
+impl<'mx, T> ExactSizeIterator for NonZeroIterMut<'mx, T> {
+    fn len(&self) -> usize {
+        self.pos.len()
+    }
+}
+
+impl<'mx, T> FusedIterator for NonZeroIterMut<'mx, T> {}
+
+impl<'m, T: 'm> NonZeroElementsMut<'m, T> for CooMatrix<T> {
+    type IterMut = NonZeroIterMut<'m, T>;
+    fn non_zero_elements_mut(&'m mut self) -> Self::IterMut {
+        NonZeroIterMut {
             pos: 0..self.data.len(),
             matrix: self,
         }

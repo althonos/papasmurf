@@ -51,29 +51,29 @@ impl Kmers {
         let b = &self.block;
         let mut out = vec![0u8; b.columns()];
 
-        // #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
-        // if std::is_x86_feature_detected!("avx2") {
-        //     unsafe {
-        //         self::avx2::mismatches(q, b, out.as_mut());
-        //     }
-        //     return Ok(out);
-        // }
+        #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+        if std::is_x86_feature_detected!("avx2") {
+            unsafe {
+                self::avx2::mismatches(q, b, out.as_mut());
+            }
+            return Ok(out);
+        }
 
-        // #[cfg(target_arch = "x86")]
-        // if std::is_x86_feature_detected!("sse2") {
-        //     unsafe {
-        //         self::sse2::mismatches(q, b, out.as_mut());
-        //     }
-        //     return Ok(out);
-        // }
+        #[cfg(target_arch = "x86")]
+        if std::is_x86_feature_detected!("sse2") {
+            unsafe {
+                self::sse2::mismatches(q, b, out.as_mut());
+            }
+            return Ok(out);
+        }
 
-        // #[cfg(target_arch = "x86_64")]
-        // {
-        //     unsafe {
-        //         self::sse2::mismatches(q, b, out.as_mut());
-        //     }
-        //     return Ok(out);
-        // }
+        #[cfg(target_arch = "x86_64")]
+        {
+            unsafe {
+                self::sse2::mismatches(q, b, out.as_mut());
+            }
+            return Ok(out);
+        }
 
         for c in 0..self.block.columns() {
             let mut m = 0;
