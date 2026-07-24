@@ -390,8 +390,7 @@ impl<D: AsRef<Database>> MapperResult<D> {
             .pi
             .iter()
             .zip(&db.amplified)
-            .map(|(pi, r)| if *r > 0 { pi / *r as f64 } else { 0.0 })
-            .map(|f| if f < 1e-10 { 0.0 } else { f })
+            .map(|(&pi, &r)| if pi > 1e-10 { pi / r as f64 } else { 0.0 })
             .collect::<Vec<_>>();
 
         // Renormalize
