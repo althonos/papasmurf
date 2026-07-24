@@ -43,6 +43,8 @@ pub struct Mapper<D: AsRef<Database>> {
     min_read_frequency: f64,
     /// Minimum read count to include in mapping.
     min_read_count: usize,
+    /// Maximum number of ambiguous bases per read.
+    max_ambiguous: usize,
     /// The read counters recording kmers and count per region.
     reads: Vec<RwLock<Counter<Paired<String>>>>,
 }
@@ -60,6 +62,7 @@ impl<D: AsRef<Database>> Mapper<D> {
             partial_hits: false,
             min_read_frequency: 1e-4,
             min_read_count: 2,
+            max_ambiguous: 0,
             added_reads: AtomicUsize::new(0),
             reads: (0..r).map(|_| RwLock::new(Counter::new())).collect(),
             db,
@@ -152,6 +155,16 @@ impl<D: AsRef<Database>> Mapper<D> {
         let db = self.db.as_ref();
         self.added_reads.fetch_add(1, Ordering::Relaxed);
 
+        // Exclude reads with ambiguous bases
+        let ambig = read.as_ref().map(|s| {
+            s.matches(|c| c != 'A' && c != 'C' && c != 'G' && c != 'T')
+                .count()
+        });
+        if ambig.forward > self.max_ambiguous || ambig.backward > self.max_ambiguous {
+            // println!("discarding: read contains too many ambiguous bases (fwd={} bwd={})", ambig.forward, ambig.backward);
+            return Ok(false);
+        }
+
         // Find the best matching primer and primer position
         let (r, region, pos, primer_mismatches) = db
             .regions
@@ -165,7 +178,8 @@ impl<D: AsRef<Database>> Mapper<D> {
                     self.scan_primer(&region.primer.backward, &read.backward),
                 )
             })
-            .min_by(|x, y| (x.2 .1 + x.3 .1).partial_cmp(&(y.2 .1 + y.3 .1)).unwrap())
+            // Find region with the least
+            .min_by(|x, y| (x.2 .1 + x.3 .1).cmp(&(y.2 .1 + y.3 .1)))
             .map(|x| {
                 (
                     x.0,
@@ -174,7 +188,7 @@ impl<D: AsRef<Database>> Mapper<D> {
                     Paired::new(x.2 .1, x.3 .1),
                 )
             })
-            .unwrap();
+            .expect("regions cannot be empty, always a minimum to be found");
 
         // Keep count of the number of reads assigned to each region
         // self.assigned_reads[r].fetch_add(1, Ordering::Relaxed);
