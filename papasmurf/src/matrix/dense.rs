@@ -12,7 +12,7 @@ use super::MatrixDimensions;
 
 /// A dense matrix backed by aligned memory.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct DenseMatrix<T: Default + Copy, A: Unsigned = U32> {
+pub struct DenseMatrix<T, A: Unsigned = U32> {
     pub(super) data: Vec<T>,
     pub(super) rows: usize,
     pub(super) cols: usize,
@@ -20,7 +20,7 @@ pub struct DenseMatrix<T: Default + Copy, A: Unsigned = U32> {
     pub(super) _alignment: std::marker::PhantomData<A>,
 }
 
-impl<T: Default + Copy, A: Unsigned> DenseMatrix<T, A> {
+impl<T: Default + Clone, A: Unsigned> DenseMatrix<T, A> {
     pub fn new(rows: usize, cols: usize) -> Self {
         // Always over-allocate columns to avoid alignment issues.
         let c = cols + (A::USIZE - cols % A::USIZE) * (cols % A::USIZE > 0) as usize;
@@ -42,17 +42,21 @@ impl<T: Default + Copy, A: Unsigned> DenseMatrix<T, A> {
             _alignment: std::marker::PhantomData,
         }
     }
+}
 
+impl<T: Default + Clone, A: Unsigned> DenseMatrix<T, A> {
     pub fn transpose(&self) -> Self {
         let mut t = Self::new(self.cols, self.rows);
         for i in 0..self.rows {
             for j in 0..self.cols {
-                t[j][i] = self[i][j];
+                t[j][i] = self[i][j].clone();
             }
         }
         t
     }
+}
 
+impl<T, A: Unsigned> DenseMatrix<T, A> {
     #[inline]
     pub fn stride(&self) -> usize {
         let x = std::mem::size_of::<T>();
@@ -63,7 +67,7 @@ impl<T: Default + Copy, A: Unsigned> DenseMatrix<T, A> {
     }
 }
 
-impl<T: Default + Copy, A: Unsigned> Index<usize> for DenseMatrix<T, A> {
+impl<T, A: Unsigned> Index<usize> for DenseMatrix<T, A> {
     type Output = [T];
     #[inline]
     fn index(&self, index: usize) -> &Self::Output {
@@ -73,7 +77,7 @@ impl<T: Default + Copy, A: Unsigned> Index<usize> for DenseMatrix<T, A> {
     }
 }
 
-impl<T: Default + Copy, A: Unsigned> IndexMut<usize> for DenseMatrix<T, A> {
+impl<T, A: Unsigned> IndexMut<usize> for DenseMatrix<T, A> {
     #[inline]
     fn index_mut(&mut self, index: usize) -> &mut Self::Output {
         let c = self.stride();
@@ -82,7 +86,7 @@ impl<T: Default + Copy, A: Unsigned> IndexMut<usize> for DenseMatrix<T, A> {
     }
 }
 
-impl<T: Default + Copy, A: Unsigned> MatrixDimensions for DenseMatrix<T, A> {
+impl<T, A: Unsigned> MatrixDimensions for DenseMatrix<T, A> {
     #[inline]
     fn rows(&self) -> usize {
         self.rows

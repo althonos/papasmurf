@@ -7,6 +7,8 @@ use serde::Deserialize;
 use serde::Serialize;
 
 use super::coo::CooMatrix;
+use super::csc::CscMatrix;
+use super::dense::DenseMatrix;
 use super::Dot;
 use super::MatrixDimensions;
 use super::NonZeroElements;
@@ -72,6 +74,54 @@ impl<T: Clone> CsrMatrix<T> {
             coo.insert(i, j, x.clone());
         }
         coo
+    }
+
+    /// Build a CSC matrix by cloning the data.
+    pub fn to_csc(&self) -> CscMatrix<T> {
+        let nnz = self.data.len();
+
+        let mut count = vec![0; self.columns()];
+        for j in self.col_index.iter() {
+            count[*j] += 1;
+        }
+
+        let mut data = self.data.clone();
+        let mut row_index = vec![0; nnz];
+        let mut col_index = vec![0; self.columns() + 1];
+        for j in 1..=self.cols {
+            col_index[j] = col_index[j - 1] + count[j - 1];
+        }
+
+        for i in 0..self.rows() {
+            for src in self.row_index[i]..self.row_index[i + 1] {
+                let j = self.col_index[src];
+                let dest = col_index[j];
+                row_index[dest] = i;
+                data[dest] = self.data[src].clone();
+                col_index[j] += 1;
+            }
+        }
+
+        col_index.insert(0, 0);
+        col_index.pop();
+
+        CscMatrix {
+            rows: self.rows(),
+            data,
+            col_index,
+            row_index,
+        }
+    }
+}
+
+impl<T: Clone + Default> CsrMatrix<T> {
+    /// Build a dense matrix by cloning data.
+    pub fn to_dense(&self) -> DenseMatrix<T> {
+        let mut dense = DenseMatrix::new(self.rows(), self.columns());
+        for (i, j, x) in self.non_zero_elements() {
+            dense[i][j] = x.clone();
+        }
+        dense
     }
 }
 
@@ -397,6 +447,23 @@ mod test {
     use super::super::dok::DokMatrix;
     use super::super::Dot;
     use super::*;
+
+    #[test]
+    fn to_csc() {
+        let mut a = DokMatrix::<u8>::new(2, 3);
+        a.insert(0, 0, 1);
+        a.insert(0, 1, 2);
+        a.insert(1, 0, 3);
+        a.insert(0, 2, 4);
+
+        let c = a.to_csr().to_csc();
+        let mut it = c.non_zero_elements();
+        assert_eq!(it.next(), Some((0, 0, &1)));
+        assert_eq!(it.next(), Some((1, 0, &3)));
+        assert_eq!(it.next(), Some((0, 1, &2)));
+        assert_eq!(it.next(), Some((0, 2, &4)));
+        assert_eq!(it.next(), None);
+    }
 
     #[test]
     fn into_coo() {

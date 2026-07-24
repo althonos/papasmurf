@@ -5,6 +5,7 @@ use std::ops::AddAssign;
 use serde::Deserialize;
 use serde::Serialize;
 
+use super::csc::CscMatrix;
 use super::csr::CsrMatrix;
 use super::MatrixDimensions;
 use super::NonZeroElements;
@@ -85,6 +86,29 @@ impl<T: Clone> DokMatrix<T> {
 
         csr.row_index[self.rows] = csr.col_index.len();
         csr
+    }
+
+    pub fn to_csc(&self) -> CscMatrix<T> {
+        let mut indices = self.data.keys().collect::<Vec<_>>();
+        indices.sort_unstable_by_key(|(x, y)| (y, x));
+
+        let mut csc = CscMatrix::new(self.rows, self.cols);
+        let mut it = indices.into_iter().peekable();
+
+        for j in 0..self.cols {
+            csc.col_index[j] = csc.row_index.len();
+            while let Some((_, y)) = it.peek() {
+                if *y != j {
+                    break;
+                }
+                let (x, y) = it.next().unwrap();
+                csc.row_index.push(*x);
+                csc.data.push(self.data.get(&(*x, *y)).unwrap().clone());
+            }
+        }
+
+        csc.col_index[self.cols] = csc.row_index.len();
+        csc
     }
 }
 
