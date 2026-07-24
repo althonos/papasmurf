@@ -8,6 +8,7 @@ use serde::Serialize;
 use super::csr::CsrMatrix;
 use super::MatrixDimensions;
 use super::NonZeroElements;
+use super::NonZeroElementsMut;
 
 // --- DokMatrix ---------------------------------------------------------------
 
@@ -158,6 +159,36 @@ impl<'m, T: 'm> NonZeroElements<'m, T> for DokMatrix<T> {
     fn non_zero_elements(&'m self) -> Self::Iter {
         NonZeroIter {
             it: self.data.iter(),
+        }
+    }
+}
+
+// --- NonZeroIter -------------------------------------------------------------
+
+pub struct NonZeroIterMut<'m, T> {
+    it: std::collections::hash_map::IterMut<'m, (usize, usize), T>,
+}
+
+impl<'mx, T> Iterator for NonZeroIterMut<'mx, T> {
+    type Item = (usize, usize, &'mx mut T);
+    fn next(&mut self) -> Option<Self::Item> {
+        self.it.next().map(|((i, j), x)| (*i, *j, x))
+    }
+}
+
+impl<'mx, T> ExactSizeIterator for NonZeroIterMut<'mx, T> {
+    fn len(&self) -> usize {
+        self.it.len()
+    }
+}
+
+impl<'mx, T> FusedIterator for NonZeroIterMut<'mx, T> {}
+
+impl<'m, T: 'm> NonZeroElementsMut<'m, T> for DokMatrix<T> {
+    type IterMut = NonZeroIterMut<'m, T>;
+    fn non_zero_elements_mut(&'m mut self) -> Self::IterMut {
+        NonZeroIterMut {
+            it: self.data.iter_mut(),
         }
     }
 }
