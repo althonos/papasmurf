@@ -184,10 +184,10 @@ impl<D: AsRef<Database>> Mapper<D> {
         if primer_mismatches.forward > self.primer_mismatches
             || primer_mismatches.backward > self.primer_mismatches
         {
-            //println!(
+            // println!(
             //    "discarding: primer mismatch fwd={} bwd={} (max={})",
             //    primer_mismatches.forward, primer_mismatches.backward, self.primer_mismatches
-            //);
+            // );
             return Ok(false);
         }
 
@@ -197,18 +197,20 @@ impl<D: AsRef<Database>> Mapper<D> {
             &read.backward[(pos.backward + region.primer.backward.len() as isize) as usize..],
         );
 
+        // println!("kmer: {:?}", kmer);
+
         // Check that the kmer is long enough for the database regions or that
         // partial mapping is enabled in the mapper.
         if kmer.forward.len() > self.kmer_length {
             kmer.forward = &kmer.forward[..self.kmer_length];
         } else if kmer.forward.len() < self.kmer_length && !self.partial_hits {
-            //println!("discarding: partial forward kmer");
+            // println!("discarding: partial forward kmer");
             return Ok(false);
         }
         if kmer.backward.len() > self.kmer_length {
             kmer.backward = &kmer.backward[..self.kmer_length];
         } else if kmer.backward.len() < self.kmer_length && !self.partial_hits {
-            //println!("discarding: partial reverse kmer");
+            // println!("discarding: partial reverse kmer");
             return Ok(false);
         }
 
@@ -229,7 +231,7 @@ impl<D: AsRef<Database>> Mapper<D> {
                 let l = kmer.forward.len() + kmer.backward.len();
                 let e = (self.error_probability / 3.0).powi(ne as i32)
                     * (1.0 - self.error_probability).powi((l - ne) as i32);
-                //println!("h={} ne={} e={}", h, ne, e);
+                // println!("h={} ne={} e={}", h, ne, e);
                 if e > 0.0 {
                     let i = match index {
                         Some(i) => i,
@@ -239,13 +241,14 @@ impl<D: AsRef<Database>> Mapper<D> {
                             i
                         }
                     };
-
                     self.expected[r]
                         .write()
                         .expect("lock was poisoned")
                         .insert((i, h), e as f64);
                     mapped = true;
                 }
+            } else {
+                // println!("h={} ne={} (fwd={} bwd={}) > kmer_mismatches={}", h, ne, mismatch.forward[pair.forward], mismatch.backward[pair.backward], self.kmer_mismatches);
             }
         }
 
@@ -282,17 +285,17 @@ impl<D: AsRef<Database>> Mapper<D> {
             freq_vec.extend(std::iter::repeat(f as f64 / reads as f64).take(q.rows()));
         }
 
-        // Normalize to regions probability (?)
+        // Normalize counts to regions probability
         for (_, j, x) in q_matrix.non_zero_elements_mut() {
             *x = *x / db.amplified[j] as f64;
         }
 
-        // Compute initial proportion vector
+        // Compute initial proportion vector pi = y @ Q
         let mut pi = vec![0.0; q_matrix.columns()];
         for (i, j, x) in q_matrix.non_zero_elements() {
             pi[j] += *x * freq_vec[i];
         }
-        let mut total = pi.iter().sum::<f64>();
+        let total = pi.iter().sum::<f64>();
         for x in pi.iter_mut() {
             *x /= total;
         }
@@ -381,7 +384,8 @@ impl<D: AsRef<Database>> MapperResult<D> {
     pub fn frequencies(&self) -> Vec<f64> {
         let db = self.db.as_ref();
 
-        // Compute frequency by normalizing by number of regions
+        // Compute frequency normalizing proportions by number of
+        // regions and hard-thresholding frequencies
         let mut freq = self
             .pi
             .iter()
@@ -444,11 +448,11 @@ impl<D: AsRef<Database>> MapperResult<D> {
         }
 
         // Remove bacteria of low frequency
-        for x in self.pi.iter_mut() {
-            if *x < 1e-10 {
-                *x = 0.0;
-            }
-        }
+        // for x in self.pi.iter_mut() {
+        //     if *x < 1e-10 {
+        //         *x = 0.0;
+        //     }
+        // }
 
         // Return L1 error
         l1

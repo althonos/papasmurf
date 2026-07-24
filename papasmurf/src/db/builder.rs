@@ -312,7 +312,7 @@ impl Builder {
                     unique.backward[&sketch.kmer.backward],
                 )];
                 if amplified[j] > 0 {
-                    matrix.insert(h, j, 1.0 / amplified[j] as f32);
+                    matrix.insert(h, j, 1.0);
                 }
             }
 
