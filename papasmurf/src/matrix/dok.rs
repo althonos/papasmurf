@@ -235,10 +235,27 @@ mod test {
         dok_matrix.insert(3, 5, 80);
 
         let csr = dok_matrix.to_csr();
-        println!("{:?}", csr);
         assert_eq!(csr.data, vec![10, 20, 30, 40, 50, 60, 70, 80]);
         assert_eq!(csr.col_index, vec![0, 1, 1, 3, 2, 3, 4, 5]);
         assert_eq!(csr.row_index, vec![0, 2, 4, 7, 8]);
+    }
+
+    #[test]
+    fn to_csc() {
+        let mut dok_matrix = DokMatrix::<u8>::new(4, 6);
+        dok_matrix.insert(0, 0, 10);
+        dok_matrix.insert(0, 1, 20);
+        dok_matrix.insert(1, 1, 30);
+        dok_matrix.insert(1, 3, 40);
+        dok_matrix.insert(2, 2, 50);
+        dok_matrix.insert(2, 3, 60);
+        dok_matrix.insert(2, 4, 70);
+        dok_matrix.insert(3, 5, 80);
+
+        let csc = dok_matrix.to_csc();
+        assert_eq!(csc.data, vec![10, 20, 30, 50, 40, 60, 70, 80]);
+        assert_eq!(csc.row_index, vec![0, 0, 1, 2, 1, 2, 2, 3]);
+        assert_eq!(csc.col_index, vec![0, 1, 3, 4, 6, 7, 8]);
     }
 
     // #[test]

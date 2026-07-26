@@ -210,8 +210,8 @@ where
         let mut out = CsrMatrix::new(self.rows(), rhs.columns());
 
         let mut ip = 0;
-        let mut x = vec![T::default(); rhs.columns()];
-        let mut xb = vec![usize::MAX; rhs.columns()];
+        let mut x: Vec<T> = vec![T::default(); rhs.columns()];
+        let mut xb: Vec<usize> = vec![usize::MAX; rhs.columns()];
 
         for i in 0..self.row_index.len() - 1 {
             out.row_index[i] = ip;
