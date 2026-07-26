@@ -193,15 +193,15 @@ where
     }
 }
 
-impl<T: Clone> From<&CooMatrix<T>> for CsrMatrix<T> {
-    fn from(coo: &CooMatrix<T>) -> CsrMatrix<T> {
-        coo.to_csr()
+impl<T: Clone> From<&CsrMatrix<T>> for CooMatrix<T> {
+    fn from(csr: &CsrMatrix<T>) -> CooMatrix<T> {
+        csr.to_coo()
     }
 }
 
-impl<T> From<CooMatrix<T>> for CsrMatrix<T> {
-    fn from(coo: CooMatrix<T>) -> CsrMatrix<T> {
-        coo.into_csr()
+impl<T> From<CsrMatrix<T>> for CooMatrix<T> {
+    fn from(csr: CsrMatrix<T>) -> CooMatrix<T> {
+        csr.into_coo()
     }
 }
 
