@@ -1,12 +1,11 @@
 use std::iter::FusedIterator;
-use std::println;
-use std::unimplemented;
 
 use serde::Deserialize;
 use serde::Serialize;
 
 use super::MatrixDimensions;
 use super::NonZeroElements;
+use super::Unique;
 
 // --- CscMatrix ---------------------------------------------------------------
 
@@ -30,52 +29,82 @@ impl<T> CscMatrix<T> {
 }
 
 impl<T: PartialEq> CscMatrix<T> {
-    /// Return a boolean vector denoting duplicate columns.
-    /// 
-    /// The first column with unique values 
-    pub fn duplicate_columns(&self) -> Vec<bool> {
+    /// Find the indices of unique columns in the CSC matrix.
+    pub fn unique_columns(&self) -> Unique {
         // Compute number of nonzero elements per columns
-        let mut lengths = vec![0; self.columns()];
+        let mut lengths: Vec<usize> = vec![0; self.columns()];
         for i in 1..=self.columns() {
             lengths[i - 1] = self.col_index[i] - self.col_index[i - 1];
         }
 
         // Sort columns by number of nonzero elements
-        let mut indices = (0..self.columns()).collect::<Vec<_>>();
-        indices.sort_by_key(|&j| (lengths[j], j));
+        let mut colptr = (0..self.columns()).collect::<Vec<_>>();
+        colptr.sort_by_key(|&j| (lengths[j], j));
 
         // Prepare the result vector
-        let mut dup = vec![false; self.columns()];
+        let mut indices = Vec::new();
+        let mut reverse = vec![None; self.columns()];
 
         // Iterate by groups
         let mut i = 0;
-        while i < indices.len() {
+        while i < colptr.len() {
             // Advance until a larger column is reached
             let mut i2 = i;
-            while i2 < indices.len() && lengths[indices[i2]] == lengths[indices[i]] {
+            while i2 < colptr.len() && lengths[colptr[i2]] == lengths[colptr[i]] {
                 i2 += 1;
             }
+
             // Get group of indices with equal length
-            let group = &indices[i..i2];
+            let group = &colptr[i..i2];
             debug_assert!(group.iter().all(|&j| lengths[j] == lengths[group[0]]));
             i = i2;
-            // Compare columns pair by pair 
+
+            // Zero-sized columns are duplicates
+            if lengths[group[0]] == 0 {
+                let j1 = group[0];
+                for &j2 in group.iter().skip(1) {
+                    reverse[j2] = Some(indices.len());
+                }
+                reverse[j1] = Some(indices.len());
+                indices.push(j1);
+                continue;
+            }
+
+            // Compare columns pair by pair
             for (n, &j1) in group.iter().enumerate() {
-                for &j2 in group[n+1..].iter() {
-                    if dup[j2] {
+                if reverse[j1].is_some() {
+                    continue;
+                }
+                for &j2 in group[n + 1..].iter() {
+                    if reverse[j2].is_some() {
                         continue;
                     }
-                    let r1 = &self.row_index[self.col_index[j1]..self.col_index[j1+1]];
-                    let r2 = &self.row_index[self.col_index[j2]..self.col_index[j2+1]];
-                    let d1 = &self.data[self.col_index[j1]..self.col_index[j1+1]];
-                    let d2 = &self.data[self.col_index[j2]..self.col_index[j2+1]];
+                    let r1 = &self.row_index[self.col_index[j1]..self.col_index[j1 + 1]];
+                    let r2 = &self.row_index[self.col_index[j2]..self.col_index[j2 + 1]];
+                    let d1 = &self.data[self.col_index[j1]..self.col_index[j1 + 1]];
+                    let d2 = &self.data[self.col_index[j2]..self.col_index[j2 + 1]];
                     if r1 == r2 && d1 == d2 {
-                        dup[j2] = true;
+                        reverse[j2] = Some(indices.len());
                     }
                 }
+                reverse[j1] = Some(indices.len());
+                indices.push(j1);
             }
         }
 
+        Unique {
+            indices,
+            reverse: reverse.into_iter().map(Option::unwrap).collect(),
+        }
+    }
+
+    /// Return a boolean vector denoting duplicate columns.
+    pub fn duplicate_columns(&self) -> Vec<bool> {
+        let uniq = self.unique_columns();
+        let mut dup = vec![true; self.columns()];
+        for &j in uniq.indices.iter() {
+            dup[j] = false;
+        }
         dup
     }
 }
@@ -174,6 +203,54 @@ mod test {
         assert_eq!(it.next(), Some((1, 0, &3)));
         assert_eq!(it.next(), Some((0, 1, &2)));
         assert_eq!(it.next(), None);
+    }
+
+    #[test]
+    fn unique_columns() {
+        let m1 = {
+            let mut a = DokMatrix::<u8>::new(2, 4);
+            a.insert(0, 1, 1);
+            a.insert(1, 2, 1);
+            a.insert(0, 3, 1);
+            a.insert(1, 3, 1);
+            a.to_csc()
+        };
+        let u1 = m1.unique_columns();
+        assert_eq!(u1.indices, &[0, 1, 2, 3]);
+        assert_eq!(u1.reverse, &[0, 1, 2, 3]);
+
+        let m2 = {
+            let mut a = DokMatrix::<u8>::new(2, 4);
+            a.insert(0, 1, 1);
+            a.insert(0, 3, 1);
+            a.to_csc()
+        };
+        let u2 = m2.unique_columns();
+        assert_eq!(u2.indices, &[0, 1]);
+        assert_eq!(u2.reverse, &[0, 1, 0, 1]);
+
+        let m3 = {
+            let mut a = DokMatrix::<u8>::new(2, 4);
+            a.insert(0, 1, 1);
+            a.insert(1, 1, 1);
+            a.insert(1, 2, 1);
+            a.insert(0, 3, 1);
+            a.insert(1, 3, 1);
+            a.to_csc()
+        };
+        let u3 = m3.unique_columns();
+        assert_eq!(u3.indices, &[0, 2, 1]);
+        assert_eq!(u3.reverse, &[0, 2, 1, 2]);
+
+        let m4 = {
+            let mut a = DokMatrix::<u8>::new(2, 4);
+            a.insert(0, 1, 1);
+            a.insert(0, 3, 2);
+            a.to_csc()
+        };
+        let u4 = m4.unique_columns();
+        assert_eq!(u4.indices, &[0, 1, 3]);
+        assert_eq!(u4.reverse, &[0, 1, 0, 2]);
     }
 
     #[test]

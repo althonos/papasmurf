@@ -65,3 +65,9 @@ pub trait Dot<Rhs = Self> {
 pub trait VerticalStack<Rhs = Self> {
     fn vstack(&mut self, other: Rhs);
 }
+
+/// Indices for unique rows / columns of a matrix.
+pub struct Unique {
+    pub indices: Vec<usize>,
+    pub reverse: Vec<usize>,
+}
