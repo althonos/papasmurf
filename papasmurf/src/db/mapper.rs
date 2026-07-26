@@ -13,6 +13,7 @@ use crate::matrix::Dot;
 use crate::matrix::MatrixDimensions;
 use crate::matrix::NonZeroElements;
 use crate::matrix::NonZeroElementsMut;
+use crate::matrix::Unique;
 use crate::matrix::VerticalStack;
 use crate::primer::Primer;
 use crate::utils::Paired;
@@ -318,21 +319,13 @@ impl<D: AsRef<Database>> Mapper<D> {
             *x = *x / db.amplified[j] as f64;
         }
 
-        // Find unique columns
-        let qcol = q.to_csc();
-        let dup = qcol.duplicate_columns();
-        println!(
-            "cols={} duplicates={}",
-            q.columns(),
-            dup.iter().map(|&x| x as usize).sum::<usize>()
-        );
+        // Find unique columns (i.e. bacterial groups)
+        let groups = q.to_csc().unique_columns();
 
         // Compute initial proportion vector pi = y @ Q
         let mut pi = vec![0.0; q.columns()];
         for (i, j, x) in q.non_zero_elements() {
-            if !dup[j] {
-                pi[j] += *x * freq_vec[i];
-            }
+            pi[j] += *x * freq_vec[i];
         }
         let total = pi.iter().sum::<f64>();
         for x in pi.iter_mut() {
@@ -348,7 +341,7 @@ impl<D: AsRef<Database>> Mapper<D> {
             y: freq_vec,
             assigned_reads,
             mapped_reads,
-            duplicates: dup,
+            groups,
         }
     }
 }
@@ -372,10 +365,12 @@ impl<D: AsRef<Database>> AsRef<Database> for Mapper<D> {
 #[derive(Debug, Clone)]
 pub struct MapperResult<D: AsRef<Database>> {
     db: D,
-    q: CooMatrix<f64>,     // dim[i, j]
-    y: Vec<f64>,           // dim[i]
-    pi: Vec<f64>,          // dim[j]
-    duplicates: Vec<bool>, // dim[j]
+    q: CooMatrix<f64>, // dim[i, j]
+    y: Vec<f64>,       // dim[i]
+    pi: Vec<f64>,      // dim[j]
+
+    groups: Unique, // dim[j]
+
     assigned_reads: Vec<usize>,
     mapped_reads: Vec<usize>,
 }
@@ -451,9 +446,7 @@ impl<D: AsRef<Database>> MapperResult<D> {
         // Estimate theta
         let mut theta = vec![0.0; self.q.rows()];
         for (i, j, x) in self.q.non_zero_elements() {
-            if !self.duplicates[j] {
-                theta[i] += *x * self.pi[j];
-            }
+            theta[i] += *x * self.pi[j];
         }
 
         // Reweight the counts (reuse theta buffer)
@@ -464,9 +457,7 @@ impl<D: AsRef<Database>> MapperResult<D> {
         // Update the refinement factor
         let mut factor = vec![0.0; self.q.columns()];
         for (i, j, x) in self.q.non_zero_elements() {
-            if !self.duplicates[j] {
-                factor[j] += *x * theta[i];
-            }
+            factor[j] += *x * theta[i];
         }
 
         // Compute L1 error

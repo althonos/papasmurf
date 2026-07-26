@@ -67,6 +67,7 @@ pub trait VerticalStack<Rhs = Self> {
 }
 
 /// Indices for unique rows / columns of a matrix.
+#[derive(Debug, Clone)]
 pub struct Unique {
     pub indices: Vec<usize>,
     pub reverse: Vec<usize>,
