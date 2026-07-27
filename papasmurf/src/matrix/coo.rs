@@ -7,6 +7,7 @@ use std::ops::Range;
 use serde::Deserialize;
 use serde::Serialize;
 
+use super::csc::CscMatrix;
 use super::csr::CsrMatrix;
 use super::MatrixDimensions;
 use super::NonZeroElements;
@@ -202,6 +203,18 @@ impl<T: Clone> From<&CsrMatrix<T>> for CooMatrix<T> {
 impl<T> From<CsrMatrix<T>> for CooMatrix<T> {
     fn from(csr: CsrMatrix<T>) -> CooMatrix<T> {
         csr.into_coo()
+    }
+}
+
+impl<T: Clone> From<&CscMatrix<T>> for CooMatrix<T> {
+    fn from(csc: &CscMatrix<T>) -> CooMatrix<T> {
+        csc.to_coo()
+    }
+}
+
+impl<T> From<CscMatrix<T>> for CooMatrix<T> {
+    fn from(csc: CscMatrix<T>) -> CooMatrix<T> {
+        csc.into_coo()
     }
 }
 

@@ -3,6 +3,7 @@ use std::iter::FusedIterator;
 use serde::Deserialize;
 use serde::Serialize;
 
+use super::coo::CooMatrix;
 use super::csr::CsrMatrix;
 use super::MatrixDimensions;
 use super::NonZeroElements;
@@ -26,6 +27,28 @@ impl<T> CscMatrix<T> {
             row_index: Vec::new(),
             col_index: vec![0; cols + 1],
         }
+    }
+
+    /// Convert the matrix into COO format without cloning data.
+    pub fn into_coo(self) -> CooMatrix<T> {
+        let mut coo = CooMatrix::new(self.rows(), self.columns());
+        coo.reserve(self.nnz());
+
+        let mut ptr = 0;
+        let mut col = 0;
+        let mut it = self.data.into_iter();
+
+        while let Some(x) = it.next() {
+            while ptr >= self.col_index[col + 1] {
+                col += 1;
+            }
+            ptr += 1;
+            coo.i.push(self.row_index[ptr - 1]);
+            coo.j.push(col);
+            coo.data.push(x);
+        }
+
+        coo
     }
 }
 
@@ -65,6 +88,15 @@ impl<T: Clone> CscMatrix<T> {
             col_index,
             row_index,
         }
+    }
+
+    /// Build a COO matrix by cloning data.
+    pub fn to_coo(&self) -> CooMatrix<T> {
+        let mut coo = CooMatrix::new(self.rows(), self.columns());
+        for (i, j, x) in self.non_zero_elements() {
+            coo.insert(i, j, x.clone());
+        }
+        coo
     }
 
     pub fn select_columns(&self, columns: &[usize]) -> Self {

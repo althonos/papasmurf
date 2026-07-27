@@ -404,8 +404,7 @@ impl<D: AsRef<Database>> MapperResult<D> {
         &self.q
     }
 
-    /// Get a reference to the read proportion vector, `π`.
-    #[inline]
+    /// Compute the read proportion vector, `π`.
     pub fn proportions(&self) -> Vec<f64> {
         // Get the final proportions by projecting the group proportions
         let mut pi = self
