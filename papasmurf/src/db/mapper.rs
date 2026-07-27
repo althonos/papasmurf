@@ -367,7 +367,7 @@ impl<D: AsRef<Database>> AsRef<Database> for Mapper<D> {
 #[derive(Debug, Clone)]
 pub struct MapperResult<D: AsRef<Database>> {
     db: D,
-    q: CooMatrix<f64>, // dim[i, j]
+    q: CooMatrix<f64>, // dim[i, j']
     y: Vec<f64>,       // dim[i]
     pi: Vec<f64>,      // dim[j]
 
@@ -404,8 +404,19 @@ impl<D: AsRef<Database>> MapperResult<D> {
 
     /// Get a reference to the read proportion vector, `π`.
     #[inline]
-    pub fn proportions(&self) -> &[f64] {
-        &self.pi
+    pub fn proportions(&self) -> Vec<f64> {
+        // Get the final proportions by projecting the group proportions
+        let mut pi = self
+            .groups
+            .reverse
+            .iter()
+            .map(|&j| if self.pi[j] >= 1e-10 { self.pi[j] } else { 0.0 })
+            .collect::<Vec<_>>();
+        let total = pi.iter().sum::<f64>();
+        for x in pi.iter_mut() {
+            *x /= total;
+        }
+        pi
     }
 
     /// Compute the bacterium frequency vector, `X`.
@@ -414,12 +425,10 @@ impl<D: AsRef<Database>> MapperResult<D> {
 
         // Compute frequency normalizing proportions by number of
         // regions and hard-thresholding frequencies
-        let mut freq = self
-            .pi
-            .iter()
-            .zip(&db.amplified)
-            .map(|(&pi, &r)| if pi > 1e-10 { pi / r as f64 } else { 0.0 })
-            .collect::<Vec<_>>();
+        let mut freq = self.proportions();
+        for (pi, &r) in freq.iter_mut().zip(&db.amplified) {
+            *pi = *pi / r as f64;
+        }
 
         // Renormalize
         let tot = freq.iter().sum::<f64>();
@@ -432,11 +441,17 @@ impl<D: AsRef<Database>> MapperResult<D> {
 
     /// Compute the number of reads mapped to each bacterium.
     pub fn mapped_by_bacterium(&self) -> Vec<usize> {
-        let mut mapped = vec![0; self.q.columns()];
+        // Get number of reads per group
+        let mut mapped_groups = vec![0; self.q.columns()];
         for (_, j, _) in self.q.non_zero_elements() {
-            mapped[j] += 1;
+            mapped_groups[j] += 1;
         }
-        mapped
+        // Expand to individual references
+        self.groups
+            .reverse
+            .iter()
+            .map(|&j| mapped_groups[j])
+            .collect()
     }
 
     /// Run one iteration of the read proportion estimation procedure.
