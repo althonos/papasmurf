@@ -68,8 +68,8 @@ impl<T> CooMatrix<T> {
 
     /// Insert a new non-zero element at the end of the matrix.
     pub(super) fn insert(&mut self, i: usize, j: usize, data: T) {
-        assert!(i < self.rows);
-        assert!(j < self.cols);
+        assert!(i < self.rows, "row index out of range");
+        assert!(j < self.cols, "column index out of range");
 
         if self.nnz() > 0 {
             let last_i = *self.i.last().unwrap();

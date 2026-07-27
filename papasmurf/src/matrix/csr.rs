@@ -70,6 +70,7 @@ impl<T: Clone> CsrMatrix<T> {
     /// Build a COO matrix by cloning data.
     pub fn to_coo(&self) -> CooMatrix<T> {
         let mut coo = CooMatrix::new(self.rows(), self.columns());
+        coo.reserve(self.nnz());
         for (i, j, x) in self.non_zero_elements() {
             coo.insert(i, j, x.clone());
         }

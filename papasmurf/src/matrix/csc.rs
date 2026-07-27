@@ -92,11 +92,7 @@ impl<T: Clone> CscMatrix<T> {
 
     /// Build a COO matrix by cloning data.
     pub fn to_coo(&self) -> CooMatrix<T> {
-        let mut coo = CooMatrix::new(self.rows(), self.columns());
-        for (i, j, x) in self.non_zero_elements() {
-            coo.insert(i, j, x.clone());
-        }
-        coo
+        self.to_csr().into_coo()
     }
 
     pub fn select_columns(&self, columns: &[usize]) -> Self {
