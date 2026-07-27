@@ -315,6 +315,12 @@ impl<T> From<CooMatrix<T>> for CsrMatrix<T> {
     }
 }
 
+impl<T: Clone> From<&CscMatrix<T>> for CsrMatrix<T> {
+    fn from(value: &CscMatrix<T>) -> Self {
+        value.to_csr()
+    }
+}
+
 impl<T> VerticalStack<CsrMatrix<T>> for CsrMatrix<T>
 where
     T: Clone,

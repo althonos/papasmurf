@@ -3,6 +3,7 @@ use std::iter::FusedIterator;
 use serde::Deserialize;
 use serde::Serialize;
 
+use super::csr::CsrMatrix;
 use super::MatrixDimensions;
 use super::NonZeroElements;
 use super::Unique;
@@ -29,6 +30,43 @@ impl<T> CscMatrix<T> {
 }
 
 impl<T: Clone> CscMatrix<T> {
+    /// Build a CSR matrix by cloning the data.
+    pub fn to_csr(&self) -> CsrMatrix<T> {
+        let nnz = self.data.len();
+
+        let mut count = vec![0; self.rows()];
+        for j in self.row_index.iter() {
+            count[*j] += 1;
+        }
+
+        let mut data = self.data.clone();
+        let mut col_index = vec![0; nnz];
+        let mut row_index = vec![0; self.rows() + 1];
+        for j in 1..=self.rows {
+            row_index[j] = row_index[j - 1] + count[j - 1];
+        }
+
+        for i in 0..self.columns() {
+            for src in self.col_index[i]..self.col_index[i + 1] {
+                let j = self.row_index[src];
+                let dest = row_index[j];
+                col_index[dest] = i;
+                data[dest] = self.data[src].clone();
+                row_index[j] += 1;
+            }
+        }
+
+        row_index.insert(0, 0);
+        row_index.pop();
+
+        CsrMatrix {
+            cols: self.columns(),
+            data,
+            col_index,
+            row_index,
+        }
+    }
+
     pub fn select_columns(&self, columns: &[usize]) -> Self {
         let mut data = Vec::new();
         let mut row_index = Vec::new();
@@ -156,6 +194,12 @@ impl<T> MatrixDimensions for CscMatrix<T> {
     }
 }
 
+impl<T: Clone> From<&CsrMatrix<T>> for CscMatrix<T> {
+    fn from(value: &CsrMatrix<T>) -> Self {
+        value.to_csc()
+    }
+}
+
 // --- NonZeroIter -------------------------------------------------------------
 
 pub struct NonZeroIter<'m, T> {
@@ -211,6 +255,23 @@ mod test {
 
     use super::super::dok::DokMatrix;
     use super::*;
+
+    #[test]
+    fn to_csr() {
+        let mut a = DokMatrix::<u8>::new(2, 3);
+        a.insert(0, 0, 1);
+        a.insert(0, 1, 2);
+        a.insert(1, 0, 3);
+        a.insert(0, 2, 4);
+
+        let c = a.to_csc().to_csr();
+        let mut it = c.non_zero_elements();
+        assert_eq!(it.next(), Some((0, 0, &1)));
+        assert_eq!(it.next(), Some((0, 1, &2)));
+        assert_eq!(it.next(), Some((0, 2, &4)));
+        assert_eq!(it.next(), Some((1, 0, &3)));
+        assert_eq!(it.next(), None);
+    }
 
     #[test]
     fn non_zero_elements() {

@@ -320,7 +320,9 @@ impl<D: AsRef<Database>> Mapper<D> {
         }
 
         // Find unique columns (i.e. bacterial groups)
-        let groups = q.to_csc().unique_columns();
+        let q_csc = q.to_csc();
+        let groups = q_csc.unique_columns();
+        q = q_csc.select_columns(&groups.indices).to_csr();
 
         // Compute initial proportion vector pi = y @ Q
         let mut pi = vec![0.0; q.columns()];
