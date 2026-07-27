@@ -9,7 +9,7 @@ use super::Unique;
 
 // --- CscMatrix ---------------------------------------------------------------
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct CscMatrix<T> {
     pub(super) rows: usize,
     pub(super) data: Vec<T>,
@@ -24,6 +24,30 @@ impl<T> CscMatrix<T> {
             data: Vec::new(),
             row_index: Vec::new(),
             col_index: vec![0; cols + 1],
+        }
+    }
+}
+
+impl<T: Clone> CscMatrix<T> {
+    pub fn select_columns(&self, columns: &[usize]) -> Self {
+        let mut data = Vec::new();
+        let mut row_index = Vec::new();
+        let mut col_index = Vec::with_capacity(columns.len() + 1);
+
+        col_index.push(0);
+        for &j in columns.iter() {
+            debug_assert!(j < self.columns());
+            let col_elem = self.col_index[j]..self.col_index[j + 1];
+            row_index.extend_from_slice(&self.row_index[col_elem.clone()]);
+            data.extend_from_slice(&self.data[col_elem]);
+            col_index.push(row_index.len());
+        }
+
+        Self {
+            rows: self.rows,
+            data,
+            row_index,
+            col_index,
         }
     }
 }
@@ -183,6 +207,8 @@ impl<'m, T: 'm> NonZeroElements<'m, T> for CscMatrix<T> {
 #[cfg(test)]
 mod test {
 
+    use std::assert_eq;
+
     use super::super::dok::DokMatrix;
     use super::*;
 
@@ -291,5 +317,36 @@ mod test {
             a.to_csc()
         };
         assert_eq!(m4.duplicate_columns(), vec![false, false, true, false]);
+    }
+
+    #[test]
+    fn select_columns() {
+        let m1 = {
+            let mut a = DokMatrix::<u8>::new(2, 4);
+            a.insert(0, 1, 1);
+            a.insert(1, 2, 1);
+            a.insert(0, 3, 1);
+            a.insert(1, 3, 1);
+            a.to_csc()
+        };
+        let b1 = m1.select_columns(&[0, 2]);
+        assert_eq!(b1.columns(), 2);
+        assert_eq!(b1.rows(), m1.rows());
+        let mut it = b1.non_zero_elements();
+        assert_eq!(it.next(), Some((1, 1, &1)));
+        assert_eq!(it.next(), None);
+
+        let m2 = {
+            let mut a = DokMatrix::<u8>::new(2, 4);
+            a.insert(0, 1, 1);
+            a.insert(1, 2, 1);
+            a.insert(0, 3, 1);
+            a.insert(1, 3, 1);
+            a.to_csc()
+        };
+        let b2 = m2.select_columns(&[0, 1, 2, 3]);
+        assert_eq!(b2.columns(), m2.columns());
+        assert_eq!(b2.rows(), m2.rows());
+        assert_eq!(b2, m2);
     }
 }
