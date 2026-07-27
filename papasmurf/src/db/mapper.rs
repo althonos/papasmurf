@@ -3,10 +3,12 @@ use std::collections::HashMap;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 use std::sync::RwLock;
+use std::unimplemented;
 
 use crate::db::Database;
 use crate::errors::Error;
 use crate::matrix::CooMatrix;
+use crate::matrix::CscMatrix;
 use crate::matrix::CsrMatrix;
 use crate::matrix::DokMatrix;
 use crate::matrix::Dot;
@@ -320,7 +322,7 @@ impl<D: AsRef<Database>> Mapper<D> {
         }
 
         // Find unique columns (i.e. bacterial groups)
-        let q_csc = q.to_csc();
+        let mut q_csc = q.to_csc();
         let groups = q_csc.unique_columns();
         q = q_csc.select_columns(&groups.indices).to_csr();
 
@@ -338,7 +340,7 @@ impl<D: AsRef<Database>> Mapper<D> {
         // (needs .refine() to get accurate).
         MapperResult {
             pi,
-            q: q.into(),
+            q,
             db: self.db,
             y: freq_vec,
             assigned_reads,
@@ -367,7 +369,7 @@ impl<D: AsRef<Database>> AsRef<Database> for Mapper<D> {
 #[derive(Debug, Clone)]
 pub struct MapperResult<D: AsRef<Database>> {
     db: D,
-    q: CooMatrix<f64>, // dim[i, j']
+    q: CsrMatrix<f64>, // dim[i, j']
     y: Vec<f64>,       // dim[i]
     pi: Vec<f64>,      // dim[j]
 
@@ -398,7 +400,7 @@ impl<D: AsRef<Database>> MapperResult<D> {
 
     /// Get a reference to the read probability matrix, `Q`.
     #[inline]
-    pub fn probabilities(&self) -> &CooMatrix<f64> {
+    pub fn probabilities(&self) -> &CsrMatrix<f64> {
         &self.q
     }
 
@@ -441,17 +443,40 @@ impl<D: AsRef<Database>> MapperResult<D> {
 
     /// Compute the number of reads mapped to each bacterium.
     pub fn mapped_by_bacterium(&self) -> Vec<usize> {
-        // Get number of reads per group
-        let mut mapped_groups = vec![0; self.q.columns()];
-        for (_, j, _) in self.q.non_zero_elements() {
-            mapped_groups[j] += 1;
+        let freq = self.frequencies();
+        let mapped_count = self.mapped_reads.iter().sum::<usize>();
+
+        let mut qfull = self
+            .q
+            .to_csc()
+            .select_columns(&self.groups.reverse)
+            .to_csr();
+
+        // Compute probability of r and j
+        for (_, j, x) in qfull.non_zero_elements_mut() {
+            *x = *x * freq[j];
         }
-        // Expand to individual references
-        self.groups
-            .reverse
-            .iter()
-            .map(|&j| mapped_groups[j])
-            .collect()
+
+        // Normalize to get probability of j given r
+        let mut pr_total = vec![0.0; qfull.columns()];
+        for (_, j, x) in qfull.non_zero_elements() {
+            pr_total[j] += *x;
+        }
+        for (_, j, x) in qfull.non_zero_elements_mut() {
+            *x /= pr_total[j] + f64::EPSILON;
+        }
+
+        // Compute count of j given r using read counts
+        for (i, _, x) in qfull.non_zero_elements_mut() {
+            *x *= self.y[i] * mapped_count as f64;
+        }
+
+        // Aggregate for all r and round to get integer counts
+        let mut read_count = vec![0.0; qfull.columns()];
+        for (_, j, x) in qfull.non_zero_elements_mut() {
+            read_count[j] += *x;
+        }
+        read_count.into_iter().map(|x| x.round() as usize).collect()
     }
 
     /// Run one iteration of the read proportion estimation procedure.
