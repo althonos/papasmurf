@@ -39,6 +39,8 @@ struct Sketch {
     kmer: Paired<Rc<str>>,
     /// The mismatches between the region primers and the reference sequence.
     primer_mismatches: Paired<usize>,
+
+    ambig: usize,
 }
 
 /// A builder for incremental construction of a new database.
@@ -119,17 +121,18 @@ impl Builder {
         I: AsRef<str>,
     {
         let name_ = name.as_ref();
+        let ambig = count_ambiguous(&sequence)?;
         let mut n = 0;
-        if count_ambiguous(&sequence)? <= 3 {
+        if ambig <= 3 {
             for dna in DisambiguationIterator::new(&sequence).unwrap() {
-                n += self.add_unambiguous(name_, &dna)?;
+                n += self.add_unambiguous(name_, &dna, ambig)?;
             }
         }
         Ok(n)
     }
 
     // Add a single unambiguous sequence to the builder.
-    fn add_unambiguous<I>(&self, name: I, sequence: &str) -> Result<usize, Error>
+    fn add_unambiguous<I>(&self, name: I, sequence: &str, ambig: usize) -> Result<usize, Error>
     where
         I: AsRef<str>,
     {
@@ -245,6 +248,7 @@ impl Builder {
                     kmer: Paired::new(fwd_kmer, bwd_kmer),
                     primer_mismatches: Paired::new(fwd_mm, bwd_mm),
                     name: name_rc.get_or_insert_with(|| name.as_ref().into()).clone(),
+                    ambig,
                 })
             {
                 amplified += 1;
@@ -315,12 +319,26 @@ impl Builder {
                     unique.forward[&sketch.kmer.forward],
                     unique.backward[&sketch.kmer.backward],
                 )];
-                matrix.insert(h, j, 1.0 / (amplified[j] as f32 + f32::EPSILON));
+                matrix.insert(
+                    h,
+                    j,
+                    (0.25 as f64).powi(sketch.ambig as i32) / (amplified[j] as f64 + f64::EPSILON),
+                );
                 if sketch.primer_mismatches.forward == 0 && sketch.primer_mismatches.backward == 0 {
                     perfect_match[j] = 1;
                 }
             }
 
+            // // Normalize rows
+            // let mut sumMPerBactPerRegion = vec![0.0; matrix.columns()];
+            // for (_, j, x) in matrix.non_zero_elements() {
+            //     sumMPerBactPerRegion[j] += x;
+            // }
+            // for (_, j, x) in matrix.non_zero_elements_mut() {
+            //     *x /= sumMPerBactPerRegion[j];
+            // }
+
+            // Reorient the region backwards primer
             let mut region_primer = primer.clone();
             region_primer.backward = region_primer.backward.reverse_complement();
 

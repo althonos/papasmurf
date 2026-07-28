@@ -28,7 +28,7 @@ struct UnindexedRegion {
     /// The set of forward and backward k-mers in this region.
     unique_kmers: Paired<OrderedSet<Rc<str>>>,
     /// A sparse matrix storing the k-mer pair for each database reference.
-    matrix: CsrMatrix<f32>,
+    matrix: CsrMatrix<f64>,
     /// Indicates for each reference whether it matched the region primers without mismatches.
     perfect_match: Vec<u8>,
 }
@@ -92,7 +92,7 @@ pub struct Region {
     /// A pair of blocks storing the unique kmers for the forward and backward region.
     block: Paired<Kmers>,
     /// A sparse matrix storing the k-mer pair for each database reference.
-    matrix: CsrMatrix<f32>,
+    matrix: CsrMatrix<f64>,
     /// Indicates for each reference whether it matched the region primers without mismatches.
     perfect_match: Vec<bool>,
 }
@@ -106,7 +106,7 @@ impl Region {
 
     /// Get a reference to the reference matrix for this region, `M`.
     #[inline]
-    pub fn matrix(&self) -> &CsrMatrix<f32> {
+    pub fn matrix(&self) -> &CsrMatrix<f64> {
         &self.matrix
     }
 }
