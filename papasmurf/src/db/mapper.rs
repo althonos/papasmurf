@@ -246,18 +246,17 @@ impl<D: AsRef<Database>> Mapper<D> {
 
         // Build region-specific Q matrix while filtering low abundance reads
         for (r, (region, reads)) in db.regions.iter().zip(&self.reads).enumerate() {
-            // Retrieve the shared buffer
+            // Retrieve the shared read buffer for this region
             let reads = reads.read().expect("lock was poisoned");
 
             // Compute the minimum number of required reads
             let total_count = reads.values().sum::<usize>();
             let threshold =
                 (self.min_read_frequency * total_count as f64).max(self.min_read_count as f64);
-            println!("region={} threshold={:?}", r, threshold);
 
             // Map to region pairs and build the E matrix
             // NOTE(@althonos): embarassingly parallelizable with a lock
-            //                  wrapping the result buffers.
+            //                  wrapping the result buffers?
             for (kmer, count) in reads.iter().filter(|(_, v)| **v as f64 >= threshold) {
                 // Compute mismatches between the read kmer and all the database kmers
                 let mismatch = Paired::new(
@@ -300,7 +299,7 @@ impl<D: AsRef<Database>> Mapper<D> {
             mapped_reads[r] = frequencies[r].iter().sum();
         }
 
-        // Merge regions Q_i,j into the same matrix
+        // Merge region-specific Q_i,j into the same matrix by stacking rows
         let mut q = CsrMatrix::<f64>::new(0, db.names.len());
         for (r, (region, expected)) in db.regions.iter().zip(expected.into_iter()).enumerate() {
             let e = DokMatrix::with_data(frequencies[r].len(), region.unique_pairs.len(), expected);
@@ -321,8 +320,9 @@ impl<D: AsRef<Database>> Mapper<D> {
             *x = *x / db.amplified[j] as f64;
         }
 
-        // Find unique columns (i.e. bacterial groups)
-        let mut q_csc = q.to_csc();
+        // Find unique columns (i.e. bacterial groups) and remove duplicates
+        // from the Q columns for the refinment procedure
+        let q_csc = q.to_csc();
         let groups = q_csc.unique_columns();
         q = q_csc.select_columns(&groups.indices).to_csr();
 
@@ -340,7 +340,7 @@ impl<D: AsRef<Database>> Mapper<D> {
         // (needs .refine() to get accurate).
         MapperResult {
             pi,
-            q,
+            q: q.to_csc(),
             db: self.db,
             y: freq_vec,
             assigned_reads,
@@ -369,7 +369,7 @@ impl<D: AsRef<Database>> AsRef<Database> for Mapper<D> {
 #[derive(Debug, Clone)]
 pub struct MapperResult<D: AsRef<Database>> {
     db: D,
-    q: CsrMatrix<f64>, // dim[i, j']
+    q: CscMatrix<f64>, // dim[i, j']
     y: Vec<f64>,       // dim[i]
     pi: Vec<f64>,      // dim[j]
 
@@ -398,11 +398,11 @@ impl<D: AsRef<Database>> MapperResult<D> {
         &self.mapped_reads
     }
 
-    /// Get a reference to the read probability matrix, `Q`.
-    #[inline]
-    pub fn probabilities(&self) -> &CsrMatrix<f64> {
-        &self.q
-    }
+    // /// Get a reference to the read probability matrix, `Q`.
+    // #[inline]
+    // pub fn probabilities(&self) -> &CsrMatrix<f64> {
+    //     &self.q
+    // }
 
     /// Compute the read proportion vector, `π`.
     pub fn proportions(&self) -> Vec<f64> {
@@ -413,6 +413,7 @@ impl<D: AsRef<Database>> MapperResult<D> {
             .iter()
             .map(|&j| if self.pi[j] >= 1e-10 { self.pi[j] } else { 0.0 })
             .collect::<Vec<_>>();
+        // Renormalize
         let total = pi.iter().sum::<f64>();
         for x in pi.iter_mut() {
             *x /= total;
@@ -423,20 +424,17 @@ impl<D: AsRef<Database>> MapperResult<D> {
     /// Compute the bacterium frequency vector, `X`.
     pub fn frequencies(&self) -> Vec<f64> {
         let db = self.db.as_ref();
-
         // Compute frequency normalizing proportions by number of
         // regions and hard-thresholding frequencies
         let mut freq = self.proportions();
         for (pi, &r) in freq.iter_mut().zip(&db.amplified) {
             *pi = *pi / r as f64;
         }
-
         // Renormalize
         let tot = freq.iter().sum::<f64>();
         for x in freq.iter_mut() {
             *x /= tot;
         }
-
         freq
     }
 
@@ -444,18 +442,11 @@ impl<D: AsRef<Database>> MapperResult<D> {
     pub fn mapped_by_bacterium(&self) -> Vec<usize> {
         let freq = self.frequencies();
         let mapped_count = self.mapped_reads.iter().sum::<usize>();
-
-        let mut qfull = self
-            .q
-            .to_csc()
-            .select_columns(&self.groups.reverse)
-            .to_csr();
-
         // Compute probability of r and j
+        let mut qfull = self.q.select_columns(&self.groups.reverse).to_csr();
         for (_, j, x) in qfull.non_zero_elements_mut() {
             *x = *x * freq[j];
         }
-
         // Normalize to get probability of j given r
         let mut pr_total = vec![0.0; qfull.columns()];
         for (_, j, x) in qfull.non_zero_elements() {
@@ -464,12 +455,10 @@ impl<D: AsRef<Database>> MapperResult<D> {
         for (_, j, x) in qfull.non_zero_elements_mut() {
             *x /= pr_total[j] + f64::EPSILON;
         }
-
         // Compute count of j given r using read counts
         for (i, _, x) in qfull.non_zero_elements_mut() {
             *x *= self.y[i] * mapped_count as f64;
         }
-
         // Aggregate for all r and round to get integer counts
         let mut read_count = vec![0.0; qfull.columns()];
         for (_, j, x) in qfull.non_zero_elements_mut() {
@@ -478,49 +467,35 @@ impl<D: AsRef<Database>> MapperResult<D> {
         read_count.into_iter().map(|x| x.round() as usize).collect()
     }
 
-    /// Run one iteration of the read proportion estimation procedure.
+    /// Run one iteration of the rea d proportion estimation procedure.
     ///
     /// Returns the L1 error.
     pub fn refine(&mut self) -> f64 {
-        let _db = self.db.as_ref();
-
         // Estimate theta
-        let mut theta = vec![0.0; self.q.rows()];
+        let mut theta = vec![f64::EPSILON; self.q.rows()];
         for (i, j, x) in self.q.non_zero_elements() {
             theta[i] += *x * self.pi[j];
         }
-
-        // Reweight the counts (reuse theta buffer)
+        // Reweight the counts (reusing theta buffer)
         for i in 0..self.q.rows() {
             theta[i] = self.y[i] / (theta[i] + f64::EPSILON);
         }
-
         // Update the refinement factor
-        let mut factor = vec![0.0; self.q.columns()];
+        let mut factor = vec![f64::EPSILON; self.q.columns()];
         for (i, j, x) in self.q.non_zero_elements() {
             factor[j] += *x * theta[i];
         }
-
         // Compute L1 error
         let l1 = factor
             .iter()
             .zip(&self.pi)
             .map(|(fact, prop)| (1.0f64 - fact).abs() * prop)
             .sum::<f64>();
-
         // Update unknown read proportion vector
         for j in 0..self.q.columns() {
             self.pi[j] *= factor[j];
         }
-
-        // Remove bacteria of low frequency
-        // for x in self.pi.iter_mut() {
-        //     if *x < 1e-10 {
-        //         *x = 0.0;
-        //     }
-        // }
-
-        // Return L1 error
+        // Yield L1 error
         l1
     }
 }
