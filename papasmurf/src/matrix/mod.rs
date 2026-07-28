@@ -106,42 +106,35 @@ pub trait AxisSum<D: Dimension> {
     fn sum_axis(&self, dim: D) -> Self::Output;
 }
 
-macro_rules! impl_sum {
-    ($MAT:ident) => {
-        impl<T> AxisSum<Rows> for $MAT<T>
-        where
-            T: Default + Clone + AddAssign,
-        {
-            type Output = Vector<T>;
-            fn sum_axis(&self, _dim: Rows) -> Self::Output {
-                let mut out = Vector::new(self.columns());
-                for (_, j, x) in self.non_zero_elements() {
-                    out[j] += x.clone();
-                }
-                out
-            }
+impl<T, M> AxisSum<Rows> for M
+where
+    M: MatrixDimensions + for<'a> NonZeroElements<'a, Elem = T>,
+    T: Default + Clone + AddAssign,
+{
+    type Output = Vector<T>;
+    fn sum_axis(&self, _dim: Rows) -> Self::Output {
+        let mut out = Vector::new(self.columns());
+        for (_, j, x) in self.non_zero_elements() {
+            out[j] += x.clone();
         }
-
-        impl<T> AxisSum<Columns> for $MAT<T>
-        where
-            T: Default + Clone + AddAssign,
-        {
-            type Output = Vector<T>;
-            fn sum_axis(&self, _dim: Columns) -> Self::Output {
-                let mut out = Vector::new(self.rows());
-                for (i, _, x) in self.non_zero_elements() {
-                    out[i] += x.clone();
-                }
-                out
-            }
-        }
-    };
+        out
+    }
 }
 
-impl_sum!(CsrMatrix);
-impl_sum!(CscMatrix);
-impl_sum!(CooMatrix);
-impl_sum!(DokMatrix);
+impl<T, M> AxisSum<Columns> for M
+where
+    M: MatrixDimensions + for<'a> NonZeroElements<'a, Elem = T>,
+    T: Default + Clone + AddAssign,
+{
+    type Output = Vector<T>;
+    fn sum_axis(&self, _dim: Columns) -> Self::Output {
+        let mut out = Vector::new(self.rows());
+        for (i, _, x) in self.non_zero_elements() {
+            out[i] += x.clone();
+        }
+        out
+    }
+}
 
 // --- Unique ------------------------------------------------------------------
 
