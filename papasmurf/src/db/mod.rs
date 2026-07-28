@@ -2,8 +2,6 @@ mod builder;
 mod kmers;
 mod mapper;
 
-use std::fs::Permissions;
-
 use serde::Deserialize;
 use serde::Serialize;
 

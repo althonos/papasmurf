@@ -1,13 +1,10 @@
-use std::assert_eq;
 use std::collections::HashMap;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 use std::sync::RwLock;
-use std::unimplemented;
 
 use crate::db::Database;
 use crate::errors::Error;
-use crate::matrix::CooMatrix;
 use crate::matrix::CscMatrix;
 use crate::matrix::CsrMatrix;
 use crate::matrix::DokMatrix;

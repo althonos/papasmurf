@@ -114,13 +114,12 @@ impl Builder {
         I: AsRef<str>,
     {
         let name_ = name.as_ref();
-        let ambig = count_ambiguous(&sequence)?;
         let mut n = 0;
 
-        if ambig <= 3 {
+        if count_ambiguous(&sequence)? <= 3 {
             let j = self.references.fetch_add(1, Ordering::Release);
             for dna in DisambiguationIterator::new(&sequence).unwrap() {
-                n += self.add_unambiguous(name_, &dna, j, ambig)?;
+                n += self.add_unambiguous(name_, &dna, j)?;
             }
         }
 
@@ -128,13 +127,7 @@ impl Builder {
     }
 
     // Add a single unambiguous sequence to the builder.
-    fn add_unambiguous<I>(
-        &self,
-        name: I,
-        sequence: &str,
-        j: usize,
-        ambig: usize,
-    ) -> Result<usize, Error>
+    fn add_unambiguous<I>(&self, name: I, sequence: &str, j: usize) -> Result<usize, Error>
     where
         I: AsRef<str>,
     {
