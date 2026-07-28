@@ -12,9 +12,10 @@ use std::sync::RwLock;
 // use lightmotif::pli::Threshold;
 
 use crate::errors::Error;
+use crate::matrix::AxisSum;
 use crate::matrix::DokMatrix;
-use crate::matrix::NonZeroElements;
 use crate::matrix::NonZeroElementsMut;
+use crate::matrix::Rows;
 use crate::primer::Primer;
 use crate::seq::count_ambiguous;
 use crate::seq::reverse_complement;
@@ -309,10 +310,9 @@ impl Builder {
             }
 
             // Normalize by bacterium to get M_hj as probabilities
-            let mut total_per_bact = vec![0.0; nbacterium];
-            for (_, j, _) in matrix.non_zero_elements() {
-                total_per_bact[j] += 1.0;
-                amplified[j] += 1;
+            let total_per_bact = matrix.sum_axis(Rows);
+            for (j, x) in total_per_bact.iter().enumerate() {
+                amplified[j] += *x as u8;
             }
             for (_, j, x) in matrix.non_zero_elements_mut() {
                 *x /= total_per_bact[j];

@@ -9,7 +9,6 @@ use serde::Serialize;
 use super::coo::CooMatrix;
 use super::csc::CscMatrix;
 use super::dense::DenseMatrix;
-use super::vector::Vector;
 use super::Dot;
 use super::MatrixDimensions;
 use super::NonZeroElements;
