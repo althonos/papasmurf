@@ -18,6 +18,7 @@ use crate::matrix::NonZeroElementsMut;
 use crate::matrix::Unique;
 use crate::matrix::VerticalStack;
 use crate::primer::Primer;
+use crate::seq::count_ambiguous;
 use crate::utils::Paired;
 
 /// Dead simple counter.
@@ -159,17 +160,13 @@ impl<D: AsRef<Database>> Mapper<D> {
         self.added_reads.fetch_add(1, Ordering::Relaxed);
 
         // Exclude reads with ambiguous bases
-        let ambig = read.as_ref().map(|s| {
-            s.matches(|c| c != 'A' && c != 'C' && c != 'G' && c != 'T')
-                .count()
-        });
+        let ambig = read.as_ref().map(|s| count_ambiguous(s)).transpose()?;
         if ambig.forward > self.max_ambiguous || ambig.backward > self.max_ambiguous {
             // println!("discarding: read contains too many ambiguous bases (fwd={} bwd={})", ambig.forward, ambig.backward);
             return Ok(false);
         }
 
         let mut mapped = false;
-
         for (r, region) in db.regions.iter().enumerate() {
             let hit_fwd = self.scan_primer(&region.primer.forward, &read.forward);
             let hit_bwd = self.scan_primer(&region.primer.backward, &read.backward);
@@ -428,7 +425,7 @@ impl<D: AsRef<Database>> MapperResult<D> {
         // regions and hard-thresholding frequencies
         let mut freq = self.proportions();
         for (pi, &r) in freq.iter_mut().zip(&db.amplified) {
-            *pi = *pi / r as f64;
+            *pi = *pi / (r as f64 + f64::EPSILON);
         }
         // Renormalize
         let tot = freq.iter().sum::<f64>();

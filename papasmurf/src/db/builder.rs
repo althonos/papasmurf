@@ -13,6 +13,8 @@ use std::sync::RwLock;
 
 use crate::errors::Error;
 use crate::matrix::DokMatrix;
+use crate::matrix::NonZeroElements;
+use crate::matrix::NonZeroElementsMut;
 use crate::primer::Primer;
 use crate::seq::count_ambiguous;
 use crate::seq::reverse_complement;
@@ -39,8 +41,6 @@ struct Sketch {
     kmer: Paired<Rc<str>>,
     /// The mismatches between the region primers and the reference sequence.
     primer_mismatches: Paired<usize>,
-
-    ambig: usize,
 }
 
 /// A builder for incremental construction of a new database.
@@ -80,13 +80,6 @@ impl Builder {
             pair.backward = pair.backward.reverse_complement();
         }
 
-        // Compute length of largest primer
-        // let largest_primer = primers
-        //     .iter()
-        //     .flat_map(|pair| [pair.forward.profile(), pair.backward.profile()])
-        //     .map(|prof| prof.len())
-        //     .max();
-
         Builder {
             primers,
             sketches,
@@ -123,16 +116,25 @@ impl Builder {
         let name_ = name.as_ref();
         let ambig = count_ambiguous(&sequence)?;
         let mut n = 0;
+
         if ambig <= 3 {
+            let j = self.references.fetch_add(1, Ordering::Release);
             for dna in DisambiguationIterator::new(&sequence).unwrap() {
-                n += self.add_unambiguous(name_, &dna, ambig)?;
+                n += self.add_unambiguous(name_, &dna, j, ambig)?;
             }
         }
+
         Ok(n)
     }
 
     // Add a single unambiguous sequence to the builder.
-    fn add_unambiguous<I>(&self, name: I, sequence: &str, ambig: usize) -> Result<usize, Error>
+    fn add_unambiguous<I>(
+        &self,
+        name: I,
+        sequence: &str,
+        j: usize,
+        ambig: usize,
+    ) -> Result<usize, Error>
     where
         I: AsRef<str>,
     {
@@ -189,7 +191,6 @@ impl Builder {
 
         let mut name_rc: Option<Rc<str>> = None;
         let mut amplified = 0;
-        let mut j = None; // index of the current bacterium
 
         for (region, primer) in self.primers.iter().enumerate() {
             let plen = primer.forward.len();
@@ -228,27 +229,16 @@ impl Builder {
                 .interner
                 .intern(&reverse_complement(&sequence[bwd_pos - self.k..bwd_pos])?);
 
-            // Assign a new index to this bacterium if needed
-            let bacterium = match j {
-                Some(x) => x,
-                None => {
-                    let x = self.references.fetch_add(1, Ordering::Relaxed);
-                    j = Some(x);
-                    x
-                }
-            };
-
             // Add the amplified k-mer to the current region.
             if self.sketches[region]
                 .write()
                 .expect("lock was poisoned")
                 .insert(Sketch {
                     // primer: Paired::new(fwd_rc, bwd_rc),
-                    bacterium,
+                    bacterium: j,
                     kmer: Paired::new(fwd_kmer, bwd_kmer),
                     primer_mismatches: Paired::new(fwd_mm, bwd_mm),
                     name: name_rc.get_or_insert_with(|| name.as_ref().into()).clone(),
-                    ambig,
                 })
             {
                 amplified += 1;
@@ -311,7 +301,7 @@ impl Builder {
             // Record which references match perfectly
             let mut perfect_match = vec![0; nbacterium];
 
-            // Build M_hj matrix
+            // Build M_hj indicator matrix
             let mut matrix = DokMatrix::new(unique_pairs.len(), nbacterium);
             for sketch in sketches.iter() {
                 let j = sketch.bacterium;
@@ -319,30 +309,27 @@ impl Builder {
                     unique.forward[&sketch.kmer.forward],
                     unique.backward[&sketch.kmer.backward],
                 )];
-                matrix.insert(
-                    h,
-                    j,
-                    (0.25 as f64).powi(sketch.ambig as i32) / (amplified[j] as f64 + f64::EPSILON),
-                );
+                matrix.insert(h, j, 1.0);
                 if sketch.primer_mismatches.forward == 0 && sketch.primer_mismatches.backward == 0 {
                     perfect_match[j] = 1;
                 }
             }
 
-            // // Normalize rows
-            // let mut sumMPerBactPerRegion = vec![0.0; matrix.columns()];
-            // for (_, j, x) in matrix.non_zero_elements() {
-            //     sumMPerBactPerRegion[j] += x;
-            // }
-            // for (_, j, x) in matrix.non_zero_elements_mut() {
-            //     *x /= sumMPerBactPerRegion[j];
-            // }
+            // Normalize by bacterium to get M_hj as probabilities
+            let mut total_per_bact = vec![0.0; nbacterium];
+            for (_, j, _) in matrix.non_zero_elements() {
+                total_per_bact[j] += 1.0;
+                amplified[j] += 1;
+            }
+            for (_, j, x) in matrix.non_zero_elements_mut() {
+                *x /= total_per_bact[j];
+            }
 
-            // Reorient the region backwards primer
+            // Reorient the backwards primer
             let mut region_primer = primer.clone();
             region_primer.backward = region_primer.backward.reverse_complement();
 
-            // Record region
+            // Record region and index it
             regions.push(
                 UnindexedRegion {
                     primer: region_primer,
