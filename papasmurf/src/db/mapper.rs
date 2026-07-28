@@ -5,6 +5,8 @@ use std::sync::RwLock;
 
 use crate::db::Database;
 use crate::errors::Error;
+use crate::matrix::AxisSum;
+use crate::matrix::Columns;
 use crate::matrix::CscMatrix;
 use crate::matrix::CsrMatrix;
 use crate::matrix::DokMatrix;
@@ -12,6 +14,7 @@ use crate::matrix::Dot;
 use crate::matrix::MatrixDimensions;
 use crate::matrix::NonZeroElements;
 use crate::matrix::NonZeroElementsMut;
+use crate::matrix::Rows;
 use crate::matrix::Unique;
 use crate::matrix::VerticalStack;
 use crate::primer::Primer;
@@ -442,10 +445,7 @@ impl<D: AsRef<Database>> MapperResult<D> {
             *x = *x * freq[j];
         }
         // Normalize to get probability of j given r
-        let mut pr_total = vec![0.0; qfull.columns()];
-        for (_, j, x) in qfull.non_zero_elements() {
-            pr_total[j] += *x;
-        }
+        let pr_total = qfull.sum_axis(Rows);
         for (_, j, x) in qfull.non_zero_elements_mut() {
             *x /= pr_total[j] + f64::EPSILON;
         }
@@ -454,11 +454,12 @@ impl<D: AsRef<Database>> MapperResult<D> {
             *x *= self.y[i] * mapped_count as f64;
         }
         // Aggregate for all r and round to get integer counts
-        let mut read_count = vec![0.0; qfull.columns()];
-        for (_, j, x) in qfull.non_zero_elements_mut() {
-            read_count[j] += *x;
-        }
-        read_count.into_iter().map(|x| x.round() as usize).collect()
+        let read_count = qfull.sum_axis(Rows);
+        read_count
+            .as_ref()
+            .into_iter()
+            .map(|x| x.round() as usize)
+            .collect()
     }
 
     /// Run one iteration of the rea d proportion estimation procedure.

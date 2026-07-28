@@ -175,7 +175,8 @@ impl<'mx, T> ExactSizeIterator for NonZeroIter<'mx, T> {
 
 impl<'mx, T> FusedIterator for NonZeroIter<'mx, T> {}
 
-impl<'m, T: 'm> NonZeroElements<'m, T> for DokMatrix<T> {
+impl<'m, T: 'm> NonZeroElements<'m> for DokMatrix<T> {
+    type Elem = T;
     type Iter = NonZeroIter<'m, T>;
     fn nnz(&'m self) -> usize {
         self.data.len()
@@ -208,7 +209,7 @@ impl<'mx, T> ExactSizeIterator for NonZeroIterMut<'mx, T> {
 
 impl<'mx, T> FusedIterator for NonZeroIterMut<'mx, T> {}
 
-impl<'m, T: 'm> NonZeroElementsMut<'m, T> for DokMatrix<T> {
+impl<'m, T: 'm> NonZeroElementsMut<'m> for DokMatrix<T> {
     type IterMut = NonZeroIterMut<'m, T>;
     fn non_zero_elements_mut(&'m mut self) -> Self::IterMut {
         NonZeroIterMut {

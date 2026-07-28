@@ -265,7 +265,8 @@ impl<'mx, T> ExactSizeIterator for NonZeroIter<'mx, T> {
 
 impl<'mx, T> FusedIterator for NonZeroIter<'mx, T> {}
 
-impl<'m, T: 'm> NonZeroElements<'m, T> for CscMatrix<T> {
+impl<'m, T: 'm> NonZeroElements<'m> for CscMatrix<T> {
+    type Elem = T;
     type Iter = NonZeroIter<'m, T>;
     fn non_zero_elements(&'m self) -> Self::Iter {
         NonZeroIter {

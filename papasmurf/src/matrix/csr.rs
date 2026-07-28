@@ -9,6 +9,7 @@ use serde::Serialize;
 use super::coo::CooMatrix;
 use super::csc::CscMatrix;
 use super::dense::DenseMatrix;
+use super::vector::Vector;
 use super::Dot;
 use super::MatrixDimensions;
 use super::NonZeroElements;
@@ -387,7 +388,8 @@ impl<'mx, T> ExactSizeIterator for NonZeroIter<'mx, T> {
 
 impl<'mx, T> FusedIterator for NonZeroIter<'mx, T> {}
 
-impl<'m, T: 'm> NonZeroElements<'m, T> for CsrMatrix<T> {
+impl<'m, T: 'm> NonZeroElements<'m> for CsrMatrix<T> {
+    type Elem = T;
     type Iter = NonZeroIter<'m, T>;
     fn nnz(&'m self) -> usize {
         self.data.len()
@@ -437,7 +439,7 @@ impl<'mx, T> ExactSizeIterator for NonZeroIterMut<'mx, T> {
 
 impl<'mx, T> FusedIterator for NonZeroIterMut<'mx, T> {}
 
-impl<'m, T: 'm> NonZeroElementsMut<'m, T> for CsrMatrix<T> {
+impl<'m, T: 'm> NonZeroElementsMut<'m> for CsrMatrix<T> {
     type IterMut = NonZeroIterMut<'m, T>;
     fn non_zero_elements_mut(&'m mut self) -> Self::IterMut {
         NonZeroIterMut {
@@ -452,7 +454,10 @@ impl<'m, T: 'm> NonZeroElementsMut<'m, T> for CsrMatrix<T> {
 mod test {
 
     use super::super::dok::DokMatrix;
+    use super::super::AxisSum;
+    use super::super::Columns;
     use super::super::Dot;
+    use super::super::Rows;
     use super::*;
 
     #[test]
@@ -544,5 +549,40 @@ mod test {
         assert_eq!(it.next(), Some((0, 1, &2)));
         assert_eq!(it.next(), Some((1, 0, &3)));
         assert_eq!(it.next(), None);
+    }
+
+    #[test]
+    fn sum_columns() {
+        let mut a = DokMatrix::<u8>::new(3, 2);
+        a.insert(0, 0, 1);
+        a.insert(0, 1, 2);
+        a.insert(1, 0, 3);
+        a.insert(1, 1, 4);
+        a.insert(2, 0, 5);
+        a.insert(2, 1, 6);
+        let m = a.to_csr();
+
+        let v = m.sum_axis(Columns);
+        assert_eq!(v.len(), m.rows());
+        assert_eq!(v[0], 3);
+        assert_eq!(v[1], 7);
+        assert_eq!(v[2], 11);
+    }
+
+    #[test]
+    fn sum_rows() {
+        let mut a = DokMatrix::<u8>::new(3, 2);
+        a.insert(0, 0, 1);
+        a.insert(0, 1, 2);
+        a.insert(1, 0, 3);
+        a.insert(1, 1, 4);
+        a.insert(2, 0, 5);
+        a.insert(2, 1, 6);
+        let m = a.to_csr();
+
+        let v = m.sum_axis(Rows);
+        assert_eq!(v.len(), m.columns());
+        assert_eq!(v[0], 9);
+        assert_eq!(v[1], 12);
     }
 }
